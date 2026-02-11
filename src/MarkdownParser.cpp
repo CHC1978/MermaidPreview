@@ -167,6 +167,28 @@ std::wstring MarkdownParser::UrlEncode(const std::wstring& text)
 }
 
 // ============================================================================
+// IsSafeUrl - Block dangerous URL schemes (javascript:, data:, vbscript:)
+// ============================================================================
+bool MarkdownParser::IsSafeUrl(const std::wstring& url)
+{
+    // Trim leading whitespace
+    size_t i = 0;
+    while (i < url.size() && (url[i] == L' ' || url[i] == L'\t')) i++;
+    if (i >= url.size()) return true; // empty is safe (renders nothing)
+
+    // Lowercase the scheme prefix for case-insensitive comparison
+    std::wstring lower;
+    for (size_t j = i; j < url.size() && j < i + 16; j++)
+        lower += (wchar_t)towlower(url[j]);
+
+    if (lower.find(L"javascript:") == 0) return false;
+    if (lower.find(L"vbscript:") == 0) return false;
+    if (lower.find(L"data:") == 0) return false;
+
+    return true;
+}
+
+// ============================================================================
 // IsHorizontalRule
 // ============================================================================
 bool MarkdownParser::IsHorizontalRule(const std::wstring& line)
@@ -317,11 +339,15 @@ std::wstring MarkdownParser::ProcessInline(const std::wstring& text)
                 if (urlEnd != std::wstring::npos) {
                     std::wstring alt = text.substr(altStart, altEnd - altStart);
                     std::wstring url = text.substr(urlStart, urlEnd - urlStart);
-                    out += L"<img src=\"";
-                    out += HtmlEscape(url);
-                    out += L"\" alt=\"";
-                    out += HtmlEscape(alt);
-                    out += L"\">";
+                    if (IsSafeUrl(url)) {
+                        out += L"<img src=\"";
+                        out += HtmlEscape(url);
+                        out += L"\" alt=\"";
+                        out += HtmlEscape(alt);
+                        out += L"\">";
+                    } else {
+                        out += L"[image blocked: unsafe URL]";
+                    }
                     i = urlEnd + 1;
                     continue;
                 }
@@ -342,11 +368,15 @@ std::wstring MarkdownParser::ProcessInline(const std::wstring& text)
                 if (urlEnd != std::wstring::npos) {
                     std::wstring linkText = text.substr(i + 1, textEnd - i - 1);
                     std::wstring url = text.substr(urlStart, urlEnd - urlStart);
-                    out += L"<a href=\"";
-                    out += HtmlEscape(url);
-                    out += L"\">";
-                    out += ProcessInline(linkText);
-                    out += L"</a>";
+                    if (IsSafeUrl(url)) {
+                        out += L"<a href=\"";
+                        out += HtmlEscape(url);
+                        out += L"\">";
+                        out += ProcessInline(linkText);
+                        out += L"</a>";
+                    } else {
+                        out += ProcessInline(linkText);
+                    }
                     i = urlEnd + 1;
                     continue;
                 }

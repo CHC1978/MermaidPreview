@@ -85,6 +85,13 @@ private:
     bool m_bMessageHandlerRegistered = false;
     std::function<void()> m_onReady;
 
+    // COM event tokens for proper unsubscription in Destroy()
+    EventRegistrationToken m_navCompletedToken = {};
+    EventRegistrationToken m_webMessageToken = {};
+
+    // Cancellation: set by Destroy() to prevent async callbacks from running
+    bool m_bDestroyed = false;
+
     // Local resource directory (mermaid.min.js location)
     std::wstring m_resourceDir;
 

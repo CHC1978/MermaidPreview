@@ -40,4 +40,7 @@ private:
 
     // Parse a table row into cells
     static std::vector<std::wstring> ParseTableRow(const std::wstring& line);
+
+    // Check if URL scheme is safe (block javascript:, data:, vbscript:)
+    static bool IsSafeUrl(const std::wstring& url);
 };

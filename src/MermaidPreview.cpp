@@ -20,6 +20,7 @@
 #include "MarkdownParser.h"
 #include "resource.h"
 #include <functional>
+#include <chrono>
 
 // ============================================================================
 // Custom Bar host window class name
@@ -159,9 +160,14 @@ void CMermaidFrame::OnEvents(HWND hwndView, UINT nEvent, LPARAM lParam)
         m_bVisible = false;
         m_bParked = false;
         m_bAutoOpened = false;
-        // Wait for async Bun startup to complete, then stop
+        // Wait for async Bun startup (with timeout to prevent hanging EmEditor)
         if (m_bunStartFuture.valid()) {
-            m_bunStartFuture.wait();
+            auto status = m_bunStartFuture.wait_for(std::chrono::milliseconds(2000));
+            if (status == std::future_status::ready) {
+                m_bunStartFuture.get(); // consume the future
+            }
+            // If timeout: Bun is stuck — proceed with cleanup anyway.
+            // BunRenderer::Stop() will terminate the process.
         }
         if (m_pBunRenderer) {
             m_pBunRenderer->Stop();
@@ -192,6 +198,9 @@ void CMermaidFrame::OnEvents(HWND hwndView, UINT nEvent, LPARAM lParam)
     // No return — fall through so EVENT_DOC_SEL_CHANGED can also run,
     // but the bitmask guard below prevents the costly close→reopen cycle.
     if (nEvent & EVENT_DOC_CLOSE) {
+        // Clear dangling HWND: this view is about to be destroyed by EmEditor.
+        if (hwndView == m_hWndLastView)
+            m_hWndLastView = nullptr;
         if (m_bVisible) {
             CloseCustomBar(hwndView);
         }
@@ -785,7 +794,10 @@ void CMermaidFrame::OnPreviewTextEdited(HWND hwndView, int lineStart, int lineEn
     UINT_PTR totalLines = (UINT_PTR)SendMessage(
         hwndView, EE_GET_LINES, (WPARAM)0, 0);
 
-    // Clamp lineEnd
+    // Validate line range from WebView2 (untrusted input)
+    if (totalLines == 0) return;
+    if (lineStart < 0 || lineStart >= (int)totalLines) return;
+    if (lineEnd < lineStart) return;
     if (lineEnd >= (int)totalLines)
         lineEnd = (int)totalLines - 1;
 
@@ -863,6 +875,8 @@ bool CMermaidFrame::IsDarkMode(HWND hwndView) const
 void CMermaidFrame::LoadSettings()
 {
     m_iBarPos = GetProfileInt(L"iPos", 2);
+    if (m_iBarPos < 0 || m_iBarPos > 3)
+        m_iBarPos = 2; // Clamp to valid Custom Bar positions
     m_bDarkMode = GetProfileInt(L"iDarkMode", 0) != 0;
     m_bDarkModeOverride = GetProfileInt(L"iDarkModeOverride", 0) != 0;
 }

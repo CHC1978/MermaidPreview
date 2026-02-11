@@ -458,6 +458,7 @@ HRESULT WebView2Manager::Initialize(HWND hwndParent, std::function<void()> onRea
 {
     m_hwndParent = hwndParent;
     m_onReady = std::move(onReady);
+    m_bDestroyed = false;
 
     // Extract mermaid.js from DLL resource to local directory
     ExtractMermaidJs();
@@ -471,6 +472,7 @@ HRESULT WebView2Manager::Initialize(HWND hwndParent, std::function<void()> onRea
         nullptr, userDataDir, nullptr,
         Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
             [this](HRESULT result, ICoreWebView2Environment* env) -> HRESULT {
+                if (m_bDestroyed) return E_ABORT;
                 if (FAILED(result) || !env)
                     return result;
 
@@ -480,6 +482,7 @@ HRESULT WebView2Manager::Initialize(HWND hwndParent, std::function<void()> onRea
                     m_hwndParent,
                     Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
                         [this](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT {
+                            if (m_bDestroyed) return E_ABORT;
                             if (FAILED(result) || !controller)
                                 return result;
 
@@ -494,6 +497,7 @@ HRESULT WebView2Manager::Initialize(HWND hwndParent, std::function<void()> onRea
                             settings->put_AreDevToolsEnabled(FALSE);
                             settings->put_IsStatusBarEnabled(FALSE);
                             settings->put_AreDefaultContextMenusEnabled(FALSE);
+                            settings->put_AreHostObjectsAllowed(FALSE);
 
                             RECT bounds;
                             GetClientRect(m_hwndParent, &bounds);
@@ -555,6 +559,7 @@ HRESULT WebView2Manager::Initialize(HWND hwndParent, std::function<void()> onRea
                                 Callback<ICoreWebView2NavigationCompletedEventHandler>(
                                     [this](ICoreWebView2* /*sender*/,
                                            ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
+                                        if (m_bDestroyed) return S_OK;
                                         BOOL success = FALSE;
                                         args->get_IsSuccess(&success);
                                         if (success) {
@@ -570,7 +575,7 @@ HRESULT WebView2Manager::Initialize(HWND hwndParent, std::function<void()> onRea
                                         }
                                         return S_OK;
                                     }).Get(),
-                                nullptr);
+                                &m_navCompletedToken);
 
                             return S_OK;
                         }).Get());
@@ -751,7 +756,7 @@ void WebView2Manager::SetEditCallback(EditCallback callback)
 
                 return S_OK;
             }).Get(),
-        nullptr);
+        &m_webMessageToken);
 }
 
 // ============================================================================
@@ -826,10 +831,19 @@ HRESULT WebView2Manager::Reparent(HWND hwndNewParent)
 
 void WebView2Manager::Destroy()
 {
+    m_bDestroyed = true;
     m_bReady = false;
     m_hasPendingRender = false;
     m_pendingHtml.clear();
     m_bMessageHandlerRegistered = false;
+
+    // Unsubscribe COM event handlers before releasing objects
+    if (m_webview) {
+        m_webview->remove_NavigationCompleted(m_navCompletedToken);
+        m_webview->remove_WebMessageReceived(m_webMessageToken);
+        m_navCompletedToken = {};
+        m_webMessageToken = {};
+    }
 
     if (m_controller) {
         m_controller->Close();
