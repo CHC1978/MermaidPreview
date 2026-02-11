@@ -1,0 +1,21 @@
+# Build output
+build/
+
+# Bun/Node
+bun-renderer/node_modules/
+bun-renderer/bun.lock
+bun-renderer/test-output.html
+
+# IDE
+.vs/
+.vscode/
+*.user
+
+# Binary artifacts
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.dll
+*.exe

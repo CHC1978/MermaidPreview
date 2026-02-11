@@ -1,0 +1,26 @@
+#include <windows.h>
+#include "resource.h"
+
+// String Table
+STRINGTABLE
+BEGIN
+    IDS_PLUGIN_NAME     "Mermaid Preview\nPreview Mermaid diagrams in sidebar"
+    IDS_STATUS_TEXT      "Toggle Mermaid Preview panel"
+    IDS_VERSION         "1.0.0"
+    IDS_MENU_TEXT       "Mermaid Preview\nPreview Mermaid diagrams in sidebar"
+END
+
+// Toolbar Bitmaps (16x16)
+IDB_BITMAP          BITMAP "icon_16.bmp"
+IDB_TRUE_16_DEFAULT BITMAP "icon_16.bmp"
+IDB_TRUE_16_BW      BITMAP "icon_16.bmp"
+IDB_TRUE_16_HOT     BITMAP "icon_16.bmp"
+
+// Embedded JavaScript resources
+IDR_MERMAID_JS RCDATA "web\\mermaid.min.js"
+
+// Toolbar Bitmaps (24x24)
+IDB_16C_24          BITMAP "icon_24.bmp"
+IDB_TRUE_24_DEFAULT BITMAP "icon_24.bmp"
+IDB_TRUE_24_BW      BITMAP "icon_24.bmp"
+IDB_TRUE_24_HOT     BITMAP "icon_24.bmp"
