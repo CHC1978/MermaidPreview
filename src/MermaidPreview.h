@@ -71,6 +71,7 @@ private:
     // --- Scroll sync ---
     void SyncScrollToPreview(HWND hwndView);
     void OnPreviewScrolled(HWND hwndView, int line);
+    void OnPreviewNavigate(HWND hwndView, int line);
 
     // --- Auto-open detection ---
     bool IsMarkdownFile(HWND hwndView) const;

@@ -299,7 +299,9 @@ void CMermaidFrame::OpenCustomBar(HWND hwndView)
     }
 
     m_bVisible = true;
-    m_bDarkMode = IsDarkMode(hwndView);
+    if (!m_bDarkModeOverride) {
+        m_bDarkMode = IsDarkMode(hwndView);
+    }
 
     // Try to start Bun renderer in background
     EnsureBunRenderer();
@@ -328,6 +330,13 @@ void CMermaidFrame::OpenCustomBar(HWND hwndView)
             m_pWebView->SetScrollCallback([this](int line) {
                 if (m_hWndLastView && IsWindow(m_hWndLastView)) {
                     OnPreviewScrolled(m_hWndLastView, line);
+                }
+            });
+
+            // Register navigate callback (click mermaid → jump editor to source)
+            m_pWebView->SetNavigateCallback([this](int line) {
+                if (m_hWndLastView && IsWindow(m_hWndLastView)) {
+                    OnPreviewNavigate(m_hWndLastView, line);
                 }
             });
 
@@ -547,7 +556,7 @@ void CMermaidFrame::UpdatePreview(HWND hwndView)
                 if (divStart == std::wstring::npos || divEnd == std::wstring::npos) continue;
                 divEnd += 6; // Include </div>
 
-                // Extract data-mermaid-src from original div for JS theme re-rendering
+                // Extract data-mermaid-src and line tracking from original div
                 std::wstring origDiv = html.substr(divStart, divEnd - divStart);
                 std::wstring dataSrc;
                 size_t srcAttr = origDiv.find(L"data-mermaid-src=\"");
@@ -558,9 +567,30 @@ void CMermaidFrame::UpdatePreview(HWND hwndView)
                         dataSrc = origDiv.substr(srcAttr, srcEnd - srcAttr);
                 }
 
+                // Preserve data-line-start and data-line-end for editing
+                std::wstring dataLineStart, dataLineEnd;
+                size_t lsAttr = origDiv.find(L"data-line-start=\"");
+                if (lsAttr != std::wstring::npos) {
+                    lsAttr += 17;
+                    size_t lsEnd = origDiv.find(L'"', lsAttr);
+                    if (lsEnd != std::wstring::npos)
+                        dataLineStart = origDiv.substr(lsAttr, lsEnd - lsAttr);
+                }
+                size_t leAttr = origDiv.find(L"data-line-end=\"");
+                if (leAttr != std::wstring::npos) {
+                    leAttr += 15;
+                    size_t leEnd = origDiv.find(L'"', leAttr);
+                    if (leEnd != std::wstring::npos)
+                        dataLineEnd = origDiv.substr(leAttr, leEnd - leAttr);
+                }
+
                 std::wstring attrs = L"class=\"mermaid-container\" data-mermaid-id=\"" + r.id + L"\"";
                 if (!dataSrc.empty())
                     attrs += L" data-mermaid-src=\"" + dataSrc + L"\"";
+                if (!dataLineStart.empty())
+                    attrs += L" data-line-start=\"" + dataLineStart + L"\"";
+                if (!dataLineEnd.empty())
+                    attrs += L" data-line-end=\"" + dataLineEnd + L"\"";
 
                 if (!r.svg.empty()) {
                     std::wstring svgDiv = L"<div " + attrs + L">" + r.svg + L"</div>";
@@ -622,6 +652,34 @@ void CMermaidFrame::OnPreviewScrolled(HWND hwndView, int line)
     Editor_SetScrollPos(hwndView, &pt);
 
     // Reset flag after 150ms to re-enable Editor→Preview sync
+    if (m_hwndHost) {
+        KillTimer(m_hwndHost, IDT_SYNC_RESET_P2E);
+        SetTimer(m_hwndHost, IDT_SYNC_RESET_P2E, SYNC_RESET_MS, nullptr);
+    }
+}
+
+// ============================================================================
+// OnPreviewNavigate - Click mermaid diagram → jump editor to source line
+// ============================================================================
+void CMermaidFrame::OnPreviewNavigate(HWND hwndView, int line)
+{
+    if (!hwndView || !IsWindow(hwndView))
+        return;
+
+    // Set caret to the beginning of the target line
+    POINT_PTR pt = {};
+    pt.x = 0;
+    pt.y = line;
+    Editor_SetCaretPos(hwndView, POS_LOGICAL_W, &pt);
+
+    // Scroll to make the target line visible (center-ish)
+    POINT_PTR scroll = {};
+    int scrollLine = (line > 5) ? line - 5 : 0;
+    scroll.y = scrollLine;
+    Editor_SetScrollPos(hwndView, &scroll);
+
+    // Suppress scroll sync feedback
+    m_bSyncFromPreview = true;
     if (m_hwndHost) {
         KillTimer(m_hwndHost, IDT_SYNC_RESET_P2E);
         SetTimer(m_hwndHost, IDT_SYNC_RESET_P2E, SYNC_RESET_MS, nullptr);
@@ -721,9 +779,13 @@ bool CMermaidFrame::IsDarkMode(HWND hwndView) const
 void CMermaidFrame::LoadSettings()
 {
     m_iBarPos = GetProfileInt(L"iPos", 2);
+    m_bDarkMode = GetProfileInt(L"iDarkMode", 0) != 0;
+    m_bDarkModeOverride = GetProfileInt(L"iDarkModeOverride", 0) != 0;
 }
 
 void CMermaidFrame::SaveSettings()
 {
     WriteProfileInt(L"iPos", m_iBarPos);
+    WriteProfileInt(L"iDarkMode", m_bDarkMode ? 1 : 0);
+    WriteProfileInt(L"iDarkModeOverride", m_bDarkModeOverride ? 1 : 0);
 }

@@ -9,7 +9,7 @@ using namespace Microsoft::WRL;
 extern HINSTANCE EEGetInstanceHandle();
 
 // HTML cache version tag — increment when BuildHtmlPage() content changes
-static const char* kHtmlVersionTag = "<!-- MermaidPreview-v5 -->";
+static const char* kHtmlVersionTag = "<!-- MermaidPreview-v8 -->";
 
 WebView2Manager::WebView2Manager() = default;
 
@@ -94,7 +94,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     // and avoid raw-string delimiter conflicts with JS code.
 
     // --- Part 1: CSS ---
-    std::wstring html = LR"P1(<!-- MermaidPreview-v5 -->
+    std::wstring html = LR"P1(<!-- MermaidPreview-v8 -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -173,6 +173,10 @@ std::wstring WebView2Manager::BuildHtmlPage() const
   body.dark [data-line-start]:hover { outline-color:#555; }
   .editing { outline:2px solid #0969da !important; background:rgba(9,105,218,0.05); padding:2px 4px; }
   body.dark .editing { outline-color:#58a6ff !important; background:rgba(88,166,255,0.05); }
+)P1";
+
+    // --- Part 1a: HTML body ---
+    html += LR"P1a(
 </style>
 </head>
 <body class="light">
@@ -185,7 +189,10 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     <div class="ctx-item ctx-action" data-action="zoom-out">Zoom Out</div>
     <div class="ctx-item ctx-action" data-action="reset">Reset View</div>
   </div>
-  <script>
+)P1a";
+
+    // --- Part 1b: Script opening + mermaid loader ---
+    html += LR"P1b(  <script>
     var mermaidReady = false;
     var renderedMermaidSrcs = {};
     var zoomTarget = null;
@@ -194,7 +201,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     // Async load mermaid.min.js — does not block NavigationCompleted
     (function(){
       var s = document.createElement('script');
-      s.src = ')P1" + mermaidSrc + LR"P2(';
+      s.src = ')P1b" + mermaidSrc + LR"P2(';
       s.onload = function() {
         mermaid.initialize({ startOnLoad:false, theme:'default', securityLevel:'strict', flowchart:{useMaxWidth:true}, sequence:{useMaxWidth:true} });
         mermaidReady = true;
@@ -317,7 +324,10 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       function onKey(ev) { if (ev.key==='Escape'){el.textContent=el._origText;finish();} else if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();save();} }
       el.addEventListener('blur', onBlur); el.addEventListener('keydown', onKey);
     });
+)P3";
 
+    // --- Part 3b: Context Menu + SVG Drag JS ---
+    html += LR"P4(
     // ===== Context Menu =====
     var ctxMenu = document.getElementById('ctx-menu');
     document.addEventListener('contextmenu', function(e) {
@@ -373,7 +383,6 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       if(e.button!==0) return;
       var container=e.target.closest('.mermaid-container'); if(!container) return;
       var svg=container.querySelector('svg'); if(!svg) return;
-      if(e.target.closest('[data-line-start]')) return;
       e.preventDefault();
       var startX=e.clientX, startY=e.clientY, moved=false;
       var s=getSvgState(svg), baseTx=s.tx, baseTy=s.ty;
@@ -386,6 +395,11 @@ std::wstring WebView2Manager::BuildHtmlPage() const
         container.classList.remove('dragging');
         document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp);
         if(!moved){
+          // Click (not drag): sync editor to this mermaid block's source line
+          var ls = container.getAttribute('data-line-start');
+          if(ls && window.chrome && window.chrome.webview){
+            window.chrome.webview.postMessage({type:'navigateToLine', line:parseInt(ls)});
+          }
           if(zoomTarget===container){ zoomTarget=null; container.classList.remove('zoom-active'); }
           else { if(zoomTarget) zoomTarget.classList.remove('zoom-active'); zoomTarget=container; container.classList.add('zoom-active'); }
         }
@@ -406,7 +420,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     function svgResetAll(){ document.querySelectorAll('.mermaid-container svg').forEach(function(svg){ applySvgState(svg,{tx:0,ty:0,scale:1}); }); }
   </script>
 </body>
-</html>)P3";
+</html>)P4";
 
     return html;
 }
@@ -657,6 +671,25 @@ void WebView2Manager::SetEditCallback(EditCallback callback)
                     return S_OK;
                 }
 
+                // Dispatch: navigateToLine message (click mermaid → jump editor)
+                if (json.find(L"\"navigateToLine\"") != std::wstring::npos && m_navigateCallback) {
+                    size_t linePos = json.find(L"\"line\"");
+                    if (linePos != std::wstring::npos) {
+                        linePos += 6;
+                        while (linePos < json.size() && (json[linePos] == L':' || json[linePos] == L' '))
+                            linePos++;
+                        int val = 0;
+                        bool found = false;
+                        while (linePos < json.size() && json[linePos] >= L'0' && json[linePos] <= L'9') {
+                            val = val * 10 + (json[linePos] - L'0');
+                            linePos++;
+                            found = true;
+                        }
+                        if (found) m_navigateCallback(val);
+                    }
+                    return S_OK;
+                }
+
                 // Dispatch: edit message
                 if (json.find(L"\"edit\"") == std::wstring::npos || !m_editCallback)
                     return S_OK;
@@ -741,6 +774,11 @@ void WebView2Manager::ScrollToLine(int line)
 void WebView2Manager::SetScrollCallback(ScrollCallback callback)
 {
     m_scrollCallback = std::move(callback);
+}
+
+void WebView2Manager::SetNavigateCallback(NavigateCallback callback)
+{
+    m_navigateCallback = std::move(callback);
 }
 
 void WebView2Manager::Destroy()

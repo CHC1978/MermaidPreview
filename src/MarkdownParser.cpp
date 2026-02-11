@@ -519,6 +519,7 @@ std::wstring MarkdownParser::ConvertToHtml(const std::wstring& markdown)
             for (auto& c : langLower) c = towlower(c);
 
             // Collect code block content
+            int codeBlockStartLine = (int)i; // opening fence line
             std::wstring codeContent;
             i++;
             while (i < n) {
@@ -540,6 +541,7 @@ std::wstring MarkdownParser::ConvertToHtml(const std::wstring& markdown)
                 codeContent += L'\n';
                 i++;
             }
+            int codeBlockEndLine = (int)(i - 1); // closing fence line
             // Remove trailing newline
             if (!codeContent.empty() && codeContent.back() == L'\n')
                 codeContent.pop_back();
@@ -551,6 +553,10 @@ std::wstring MarkdownParser::ConvertToHtml(const std::wstring& markdown)
                 html += id;
                 html += L"\" data-mermaid-src=\"";
                 html += UrlEncode(codeContent);
+                html += L"\" data-line-start=\"";
+                html += std::to_wstring(codeBlockStartLine);
+                html += L"\" data-line-end=\"";
+                html += std::to_wstring(codeBlockEndLine);
                 html += L"\"></div>\n";
             } else {
                 // Regular code block

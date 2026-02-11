@@ -50,6 +50,10 @@ public:
     using ScrollCallback = std::function<void(int line)>;
     void SetScrollCallback(ScrollCallback callback);
 
+    // Set callback for click-to-navigate from preview (scroll + caret)
+    using NavigateCallback = std::function<void(int line)>;
+    void SetNavigateCallback(NavigateCallback callback);
+
 private:
     // Build the HTML page shell (CSS + mermaid rendering JS)
     // mermaid.js is loaded from local extracted file
@@ -83,4 +87,5 @@ private:
     EditCallback m_editCallback;
     ThemeCallback m_themeCallback;
     ScrollCallback m_scrollCallback;
+    NavigateCallback m_navigateCallback;
 };
