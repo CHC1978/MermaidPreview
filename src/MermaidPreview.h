@@ -88,9 +88,11 @@ private:
 
     // --- State ---
     HWND                            m_hwndHost = nullptr;
+    HWND                            m_hwndParking = nullptr;  // Hidden parking window for WebView2
     HWND                            m_hWndLastView = nullptr;
     UINT                            m_nBarID = 0;
     bool                            m_bVisible = false;
+    bool                            m_bParked = false;        // WebView2 is parked (hidden, not destroyed)
     bool                            m_bAutoOpened = false;
     std::unique_ptr<WebView2Manager> m_pWebView;
     std::unique_ptr<BunRenderer>    m_pBunRenderer;

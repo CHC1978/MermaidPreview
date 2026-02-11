@@ -27,6 +27,9 @@
 static const wchar_t* const kHostClassName = L"MermaidPreviewHost";
 static bool s_bHostClassRegistered = false;
 
+static const wchar_t* const kParkingClassName = L"MermaidPreviewParking";
+static bool s_bParkingClassRegistered = false;
+
 static CMermaidFrame* GetFrameFromHost(HWND hwnd)
 {
     return reinterpret_cast<CMermaidFrame*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
@@ -116,27 +119,46 @@ void CMermaidFrame::OnEvents(HWND hwndView, UINT nEvent, LPARAM lParam)
 {
     if (nEvent & EVENT_CREATE_FRAME) {
         LoadSettings();
+        // Create a 1x1 hidden popup to serve as parking window for WebView2
+        if (!s_bParkingClassRegistered) {
+            WNDCLASSEX wc = {};
+            wc.cbSize = sizeof(wc);
+            wc.lpfnWndProc = DefWindowProc;
+            wc.hInstance = EEGetInstanceHandle();
+            wc.lpszClassName = kParkingClassName;
+            if (RegisterClassEx(&wc))
+                s_bParkingClassRegistered = true;
+        }
+        m_hwndParking = CreateWindowEx(0, kParkingClassName,
+            L"MermaidPreviewParking", WS_POPUP,
+            0, 0, 1, 1,
+            nullptr, nullptr, EEGetInstanceHandle(), nullptr);
         return;
     }
 
     if (nEvent & EVENT_CLOSE_FRAME) {
         SaveSettings();
-        if (m_bVisible) {
-            if (m_pWebView) {
-                m_pWebView->Destroy();
-                m_pWebView.reset();
-            }
-            if (m_hwndHost) {
-                DestroyWindow(m_hwndHost);
-                m_hwndHost = nullptr;
-            }
-            if (m_nBarID != 0) {
-                Editor_CustomBarClose(m_hWnd, m_nBarID);
-                m_nBarID = 0;
-            }
-            m_bVisible = false;
-            m_bAutoOpened = false;
+        // Full cleanup: destroy WebView2 regardless of visible/parked state
+        if (m_pWebView) {
+            m_pWebView->Destroy();
+            m_pWebView.reset();
         }
+        if (m_hwndHost) {
+            DestroyWindow(m_hwndHost);
+            m_hwndHost = nullptr;
+        }
+        if (m_nBarID != 0) {
+            Editor_CustomBarClose(m_hWnd, m_nBarID);
+            m_nBarID = 0;
+        }
+        // Destroy parking window last
+        if (m_hwndParking) {
+            DestroyWindow(m_hwndParking);
+            m_hwndParking = nullptr;
+        }
+        m_bVisible = false;
+        m_bParked = false;
+        m_bAutoOpened = false;
         // Wait for async Bun startup to complete, then stop
         if (m_bunStartFuture.valid()) {
             m_bunStartFuture.wait();
@@ -166,17 +188,30 @@ void CMermaidFrame::OnEvents(HWND hwndView, UINT nEvent, LPARAM lParam)
         return;
     }
 
+    // EVENT_DOC_CLOSE: close (park) preview immediately.
+    // No return — fall through so EVENT_DOC_SEL_CHANGED can also run,
+    // but the bitmask guard below prevents the costly close→reopen cycle.
+    if (nEvent & EVENT_DOC_CLOSE) {
+        if (m_bVisible) {
+            CloseCustomBar(hwndView);
+        }
+    }
+
     if (nEvent & EVENT_DOC_SEL_CHANGED) {
         m_hWndLastView = hwndView;
         if (!m_bVisible) {
-            TryAutoOpen(hwndView);
-        } else {
-            m_nLastHash = 0;
-            m_sLastContent.clear();
-            if (m_bAutoOpened) {
-                TryAutoClose(hwndView);
+            // Guard: if EVENT_DOC_CLOSE is in the same bitmask, skip auto-open
+            // to avoid the expensive close→reopen cycle that blocks EmEditor.
+            if (!(nEvent & EVENT_DOC_CLOSE)) {
+                TryAutoOpen(hwndView);
             }
-            if (m_bVisible) {
+        } else {
+            // Preview is visible — check if new tab still has mermaid
+            if (!IsMarkdownFile(hwndView) || !HasMermaidBlocks(hwndView)) {
+                CloseCustomBar(hwndView);
+            } else {
+                m_nLastHash = 0;
+                m_sLastContent.clear();
                 UpdatePreview(hwndView);
             }
         }
@@ -299,6 +334,7 @@ void CMermaidFrame::OpenCustomBar(HWND hwndView)
     }
 
     m_bVisible = true;
+    m_hWndLastView = hwndView;
     if (!m_bDarkModeOverride) {
         m_bDarkMode = IsDarkMode(hwndView);
     }
@@ -306,15 +342,41 @@ void CMermaidFrame::OpenCustomBar(HWND hwndView)
     // Try to start Bun renderer in background
     EnsureBunRenderer();
 
-    // Initialize WebView2
+    // === FAST PATH: Reparent parked WebView2 (~10ms vs ~800-1500ms) ===
+    if (m_bParked && m_pWebView && m_pWebView->IsReady()) {
+        HRESULT hr = m_pWebView->Reparent(m_hwndHost);
+        if (SUCCEEDED(hr)) {
+            m_bParked = false;
+            m_pWebView->SetTheme(m_bDarkMode);
+            // Force re-render with current content
+            m_nLastHash = 0;
+            m_sLastContent.clear();
+            UpdatePreview(hwndView);
+            return;
+        }
+        // Reparent failed — fall through to full init
+        m_pWebView->Destroy();
+        m_pWebView.reset();
+        m_bParked = false;
+    }
+
+    // === FALLBACK: parked but not ready (init was in progress) ===
+    if (m_bParked && m_pWebView) {
+        m_pWebView->Destroy();
+        m_pWebView.reset();
+        m_bParked = false;
+    }
+
+    // === FULL INIT: Create new WebView2 ===
     m_pWebView = std::make_unique<WebView2Manager>();
-    m_pWebView->Initialize(m_hwndHost, [this, hwndView]() {
+    m_pWebView->Initialize(m_hwndHost, [this]() {
         if (m_pWebView) {
             m_pWebView->SetTheme(m_bDarkMode);
 
-            // Register WebMessage handler for editing
-            m_pWebView->SetEditCallback([this, hwndView](int lineStart, int lineEnd, const std::wstring& newText) {
-                OnPreviewTextEdited(hwndView, lineStart, lineEnd, newText);
+            // Register WebMessage handler for editing (uses m_hWndLastView, not captured hwndView)
+            m_pWebView->SetEditCallback([this](int lineStart, int lineEnd, const std::wstring& newText) {
+                if (m_hWndLastView && IsWindow(m_hWndLastView))
+                    OnPreviewTextEdited(m_hWndLastView, lineStart, lineEnd, newText);
             });
 
             // Register theme change callback (from right-click context menu)
@@ -343,11 +405,12 @@ void CMermaidFrame::OpenCustomBar(HWND hwndView)
             // Optimization 3: Use pre-fetched content if available
             if (m_bHasPrefetch) {
                 m_pWebView->RenderContent(m_sPrefetchedHtml, m_bDarkMode);
-                SyncScrollToPreview(hwndView);
+                if (m_hWndLastView && IsWindow(m_hWndLastView))
+                    SyncScrollToPreview(m_hWndLastView);
                 m_bHasPrefetch = false;
                 m_sPrefetchedHtml.clear();
-            } else {
-                UpdatePreview(hwndView);
+            } else if (m_hWndLastView && IsWindow(m_hWndLastView)) {
+                UpdatePreview(m_hWndLastView);
             }
         }
     });
@@ -362,8 +425,6 @@ void CMermaidFrame::OpenCustomBar(HWND hwndView)
         m_sPrefetchedHtml = MarkdownParser::ConvertToHtml(content);
         m_bHasPrefetch = true;
     }
-
-    m_hWndLastView = hwndView;
 }
 
 // ============================================================================
@@ -374,6 +435,7 @@ void CMermaidFrame::CloseCustomBar(HWND /*hwndView*/)
     if (!m_bVisible)
         return;
 
+    // 1. Kill timers
     if (m_hwndHost) {
         KillTimer(m_hwndHost, IDT_DEBOUNCE);
         KillTimer(m_hwndHost, IDT_SCROLL_SYNC);
@@ -381,16 +443,30 @@ void CMermaidFrame::CloseCustomBar(HWND /*hwndView*/)
         KillTimer(m_hwndHost, IDT_SYNC_RESET_P2E);
     }
 
-    if (m_pWebView) {
+    // 2. Restore focus to EmEditor BEFORE parking WebView2.
+    //    WebView2 browser process may own the focus; reclaim it first
+    //    so that parking doesn't leave focus on the hidden parking window.
+    if (m_hWnd && IsWindow(m_hWnd))
+        SetFocus(m_hWnd);
+
+    // 3. Park WebView2 to parking window (if controller exists)
+    if (m_pWebView && m_pWebView->HasController() && m_hwndParking) {
+        m_pWebView->Park(m_hwndParking);
+        m_bParked = true;
+    } else if (m_pWebView) {
+        // Controller not yet created (async init in progress) — destroy
         m_pWebView->Destroy();
         m_pWebView.reset();
+        m_bParked = false;
     }
 
+    // 4. Close custom bar
     if (m_nBarID != 0) {
         Editor_CustomBarClose(m_hWnd, m_nBarID);
         m_nBarID = 0;
     }
 
+    // 5. Destroy host window (WebView2 is already parked elsewhere, safe)
     if (m_hwndHost) {
         DestroyWindow(m_hwndHost);
         m_hwndHost = nullptr;
@@ -421,7 +497,15 @@ void CMermaidFrame::OnCustomBarClosed(HWND /*hwndView*/, LPARAM lParam)
         KillTimer(m_hwndHost, IDT_SYNC_RESET_P2E);
     }
 
-    if (m_pWebView) {
+    // Restore focus before parking (WebView2 browser process may own focus)
+    if (m_hWnd && IsWindow(m_hWnd))
+        SetFocus(m_hWnd);
+
+    // Park WebView2 (guard: !m_bParked prevents double-park if CloseCustomBar already did it)
+    if (!m_bParked && m_pWebView && m_pWebView->HasController() && m_hwndParking) {
+        m_pWebView->Park(m_hwndParking);
+        m_bParked = true;
+    } else if (!m_bParked && m_pWebView) {
         m_pWebView->Destroy();
         m_pWebView.reset();
     }

@@ -9,7 +9,7 @@ using namespace Microsoft::WRL;
 extern HINSTANCE EEGetInstanceHandle();
 
 // HTML cache version tag — increment when BuildHtmlPage() content changes
-static const char* kHtmlVersionTag = "<!-- MermaidPreview-v8 -->";
+static const char* kHtmlVersionTag = "<!-- MermaidPreview-v9 -->";
 
 WebView2Manager::WebView2Manager() = default;
 
@@ -94,7 +94,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     // and avoid raw-string delimiter conflicts with JS code.
 
     // --- Part 1: CSS ---
-    std::wstring html = LR"P1(<!-- MermaidPreview-v8 -->
+    std::wstring html = LR"P1(<!-- MermaidPreview-v9 -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -384,7 +384,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       var container=e.target.closest('.mermaid-container'); if(!container) return;
       var svg=container.querySelector('svg'); if(!svg) return;
       e.preventDefault();
-      var startX=e.clientX, startY=e.clientY, moved=false;
+      var startX=e.clientX, startY=e.clientY, moved=false, wasCtrl=e.ctrlKey;
       var s=getSvgState(svg), baseTx=s.tx, baseTy=s.ty;
       function onMove(ev){
         var dx=ev.clientX-startX, dy=ev.clientY-startY;
@@ -395,20 +395,24 @@ std::wstring WebView2Manager::BuildHtmlPage() const
         container.classList.remove('dragging');
         document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp);
         if(!moved){
-          // Click (not drag): sync editor to this mermaid block's source line
-          var ls = container.getAttribute('data-line-start');
-          if(ls && window.chrome && window.chrome.webview){
-            window.chrome.webview.postMessage({type:'navigateToLine', line:parseInt(ls)});
+          if(wasCtrl){
+            // Ctrl+Click: toggle zoom-active mode
+            if(zoomTarget===container){ zoomTarget=null; container.classList.remove('zoom-active'); }
+            else { if(zoomTarget) zoomTarget.classList.remove('zoom-active'); zoomTarget=container; container.classList.add('zoom-active'); }
+          } else {
+            // Regular click: sync editor to this mermaid block's source line
+            var ls = container.getAttribute('data-line-start');
+            if(ls && window.chrome && window.chrome.webview){
+              window.chrome.webview.postMessage({type:'navigateToLine', line:parseInt(ls)});
+            }
           }
-          if(zoomTarget===container){ zoomTarget=null; container.classList.remove('zoom-active'); }
-          else { if(zoomTarget) zoomTarget.classList.remove('zoom-active'); zoomTarget=container; container.classList.add('zoom-active'); }
         }
       }
       document.addEventListener('mousemove',onMove); document.addEventListener('mouseup',onUp);
     });
     document.getElementById('content').addEventListener('wheel', function(e) {
       var container=e.target.closest('.mermaid-container');
-      if(!container || container!==zoomTarget) return;
+      if(!container || (!e.ctrlKey && container!==zoomTarget)) return;
       var svg=container.querySelector('svg'); if(!svg) return;
       e.preventDefault(); var s=getSvgState(svg), factor=e.deltaY>0?0.9:1.1;
       var ns=Math.max(0.2,Math.min(5,s.scale*factor));
@@ -628,8 +632,10 @@ void WebView2Manager::SetEditCallback(EditCallback callback)
 {
     m_editCallback = std::move(callback);
 
-    if (!m_webview)
+    if (!m_webview || m_bMessageHandlerRegistered)
         return;
+
+    m_bMessageHandlerRegistered = true;
 
     m_webview->add_WebMessageReceived(
         Callback<ICoreWebView2WebMessageReceivedEventHandler>(
@@ -781,11 +787,49 @@ void WebView2Manager::SetNavigateCallback(NavigateCallback callback)
     m_navigateCallback = std::move(callback);
 }
 
+// ============================================================================
+// Park - Move WebView2 to a hidden parking window without destroying
+// ============================================================================
+void WebView2Manager::Park(HWND hwndParking)
+{
+    if (!m_controller)
+        return;
+
+    // Hide first to deactivate WebView2 and release focus,
+    // THEN reparent to parking window.
+    m_controller->put_IsVisible(FALSE);
+    m_controller->put_ParentWindow(hwndParking);
+    m_hwndParent = hwndParking;
+}
+
+// ============================================================================
+// Reparent - Move WebView2 from parking window to a new host (fast reopen)
+// ============================================================================
+HRESULT WebView2Manager::Reparent(HWND hwndNewParent)
+{
+    if (!m_controller)
+        return E_FAIL;
+
+    HRESULT hr = m_controller->put_ParentWindow(hwndNewParent);
+    if (FAILED(hr))
+        return hr;
+
+    m_hwndParent = hwndNewParent;
+
+    RECT bounds;
+    GetClientRect(hwndNewParent, &bounds);
+    m_controller->put_Bounds(bounds);
+    m_controller->put_IsVisible(TRUE);
+
+    return S_OK;
+}
+
 void WebView2Manager::Destroy()
 {
     m_bReady = false;
     m_hasPendingRender = false;
     m_pendingHtml.clear();
+    m_bMessageHandlerRegistered = false;
 
     if (m_controller) {
         m_controller->Close();

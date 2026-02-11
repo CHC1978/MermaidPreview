@@ -35,6 +35,15 @@ public:
     // Is the WebView2 ready to render?
     bool IsReady() const { return m_bReady; }
 
+    // Parking window support: move WebView2 to a hidden window without destroying
+    void Park(HWND hwndParking);
+
+    // Reparent WebView2 to a new host window (fast reopen)
+    HRESULT Reparent(HWND hwndNewParent);
+
+    // Check if the controller has been created (for park/destroy decisions)
+    bool HasController() const { return m_controller != nullptr; }
+
     // Set callback for text editing from preview panel
     using EditCallback = std::function<void(int lineStart, int lineEnd, const std::wstring& newText)>;
     void SetEditCallback(EditCallback callback);
@@ -73,6 +82,7 @@ private:
     Microsoft::WRL::ComPtr<ICoreWebView2>           m_webview;
     HWND m_hwndParent = nullptr;
     bool m_bReady = false;
+    bool m_bMessageHandlerRegistered = false;
     std::function<void()> m_onReady;
 
     // Local resource directory (mermaid.min.js location)
