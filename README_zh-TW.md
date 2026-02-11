@@ -2,7 +2,7 @@
 
 EmEditor 原生外掛程式 — 在可停靠的側邊欄中即時預覽 Mermaid 圖表與 Markdown 內容。
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -14,9 +14,12 @@ EmEditor 原生外掛程式 — 在可停靠的側邊欄中即時預覽 Mermaid 
 - **雙向捲動同步** — 編輯器與預覽面板的捲動位置雙向同步
 - **行內編輯** — 雙擊預覽面板中的文字區塊可直接編輯，修改內容會寫回編輯器
 - **亮色 / 暗色主題** — 自動偵測 EmEditor 主題，亦可透過右鍵選單手動切換
-- **SVG 平移與縮放** — 點擊圖表啟用縮放模式，滾輪縮放、拖曳平移
-- **自動開啟/關閉** — 偵測到含有 ` ```mermaid ` 區塊的 Markdown 檔案時自動開啟；切換到非 Mermaid 檔案時自動關閉
+- **點擊導航** — 點擊 Mermaid 圖表可跳轉至編輯器中對應的原始碼行
+- **SVG 平移與縮放** — Ctrl+點擊圖表啟用縮放模式；Ctrl+滾輪可直接縮放；拖曳平移
+- **自動開啟/關閉** — 偵測到含有 ` ```mermaid ` 區塊的 Markdown 檔案時自動開啟；切換到非 Mermaid 檔案或關閉標籤時自動關閉
+- **快速重開（Parking Window）** — 關閉預覽時 WebView2 會停泊至隱藏視窗而非銷毀；重開僅需 ~10ms（原需 ~800-1500ms）
 - **可停靠面板** — 支援左、右、上、下停靠，位置跨工作階段保存
+- **安全強化** — URL scheme 驗證封鎖 `javascript:`/`data:`/`vbscript:` 連結；WebView2 host object 注入已停用；行號輸入已驗證
 - **Bun 預渲染**（選用）— 安裝 [Bun](https://bun.sh) 後，Mermaid 圖表可在伺服器端預先渲染為 SVG，顯示更快
 
 ## 架構
@@ -47,6 +50,7 @@ EmEditor
 | **HTML 快取** | `preview.html` 以版本標記快取於磁碟，未變更時跳過重建 | ~10-20ms |
 | **Async mermaid.js** | mermaid.min.js (~2MB) 非同步載入，Markdown 文字立即顯示 | ~200-500ms |
 | **內容預取** | 文件解析與 WebView2 初始化平行執行 | ~10-50ms |
+| **Parking Window** | 關閉時 WebView2 停泊至隱藏視窗而非銷毀；重開跳過完整初始化 | ~800-1500ms |
 
 ## 系統需求
 
@@ -124,9 +128,11 @@ cmake --build build-debug
 | **編輯文字** | 編輯器中的變更會在短暫延遲後反映到預覽 |
 | **雙擊**預覽文字 | 啟用行內編輯；按 Enter 儲存，Escape 取消 |
 | **右鍵**預覽面板 | 開啟右鍵選單（主題切換、縮放控制） |
-| **點擊**圖表 | 啟用該圖表的縮放模式 |
+| **點擊**圖表 | 跳轉至編輯器中對應的原始碼行 |
+| **Ctrl+點擊**圖表 | 啟用該圖表的縮放模式 |
+| **Ctrl+滾輪**於圖表上 | 直接縮放（無需先啟用縮放模式） |
 | **滾輪**於啟用的圖表上 | 縮放 |
-| **拖曳**圖表 | 平移圖表 |
+| **拖曳**啟用的圖表 | 平移圖表 |
 
 ## 專案結構
 

@@ -2,7 +2,7 @@
 
 A native EmEditor plug-in that renders live Mermaid diagrams and Markdown previews in a dockable sidebar panel.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -14,9 +14,12 @@ A native EmEditor plug-in that renders live Mermaid diagrams and Markdown previe
 - **Bidirectional Scroll Sync** — Editor and preview scroll positions stay synchronized in both directions
 - **Inline Editing** — Double-click any text block in the preview to edit it directly; changes are written back to the editor
 - **Light / Dark Theme** — Auto-detects EmEditor's theme; manual override available via right-click context menu
-- **SVG Pan & Zoom** — Click a diagram to activate zoom mode, then scroll to zoom in/out; drag to pan
-- **Auto Open/Close** — Automatically opens when a Markdown file containing ` ```mermaid ` blocks is detected; closes when switching to non-Mermaid files
+- **Click-to-Navigate** — Click any Mermaid diagram to jump the editor cursor to the corresponding source line
+- **SVG Pan & Zoom** — Ctrl+Click a diagram to activate zoom mode; Ctrl+Scroll to zoom directly; drag to pan
+- **Auto Open/Close** — Automatically opens when a Markdown file containing ` ```mermaid ` blocks is detected; closes when switching to non-Mermaid files or closing the tab
+- **Fast Reopen (Parking Window)** — When the preview is closed, WebView2 is parked in a hidden window instead of destroyed; reopening takes ~10ms instead of ~800-1500ms
 - **Dockable Panel** — Supports left, right, top, or bottom docking; position is persisted across sessions
+- **Security Hardened** — URL scheme validation blocks `javascript:`/`data:`/`vbscript:` in links; WebView2 host object injection disabled; line-number input validated
 - **Bun Pre-rendering** (Optional) — If [Bun](https://bun.sh) is installed, Mermaid diagrams are pre-rendered server-side for faster display
 
 ## Architecture
@@ -47,6 +50,7 @@ Editor Text
 | **HTML Cache** | `preview.html` is cached on disk with a version tag; skips rebuild when unchanged | ~10-20ms |
 | **Async mermaid.js** | mermaid.min.js (~2MB) loads asynchronously; Markdown text appears immediately | ~200-500ms |
 | **Content Pre-fetch** | Document parsing runs in parallel with WebView2 initialization | ~10-50ms |
+| **Parking Window** | WebView2 is reparented to a hidden window on close instead of destroyed; reopen skips full init | ~800-1500ms |
 
 ## Requirements
 
@@ -124,9 +128,11 @@ cmake --build build-debug
 | **Edit text** | Changes in the editor are reflected in the preview after a short delay |
 | **Double-click** preview text | Enables inline editing; press Enter to save, Escape to cancel |
 | **Right-click** preview | Opens context menu (theme toggle, zoom controls) |
-| **Click** a diagram | Activates zoom mode for that diagram |
+| **Click** a diagram | Jumps the editor cursor to the corresponding source line |
+| **Ctrl+Click** a diagram | Activates zoom mode for that diagram |
+| **Ctrl+Scroll wheel** on a diagram | Zoom in/out directly (no need to activate zoom first) |
 | **Scroll wheel** on active diagram | Zoom in/out |
-| **Drag** a diagram | Pan the diagram |
+| **Drag** an active diagram | Pan the diagram |
 
 ## Project Structure
 
