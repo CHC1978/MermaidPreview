@@ -43,4 +43,7 @@ private:
 
     // Check if URL scheme is safe (block javascript:, data:, vbscript:)
     static bool IsSafeUrl(const std::wstring& url);
+
+    // Generate a URL-safe slug from heading text (for id attributes)
+    static std::wstring GenerateSlug(const std::wstring& text);
 };

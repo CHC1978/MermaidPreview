@@ -189,6 +189,43 @@ bool MarkdownParser::IsSafeUrl(const std::wstring& url)
 }
 
 // ============================================================================
+// GenerateSlug - Convert heading text to URL-safe anchor id
+// e.g. "My Heading!" -> "my-heading", "Hello World 123" -> "hello-world-123"
+// ============================================================================
+std::wstring MarkdownParser::GenerateSlug(const std::wstring& text)
+{
+    std::wstring slug;
+    slug.reserve(text.size());
+    bool prevDash = false;
+
+    for (wchar_t ch : text) {
+        if ((ch >= L'A' && ch <= L'Z')) {
+            slug += (wchar_t)(ch + 32); // lowercase
+            prevDash = false;
+        } else if ((ch >= L'a' && ch <= L'z') || (ch >= L'0' && ch <= L'9')) {
+            slug += ch;
+            prevDash = false;
+        } else if (ch > 0x7F) {
+            // Keep non-ASCII characters (CJK, etc.) as-is
+            slug += ch;
+            prevDash = false;
+        } else if (ch == L' ' || ch == L'-' || ch == L'_') {
+            if (!slug.empty() && !prevDash) {
+                slug += L'-';
+                prevDash = true;
+            }
+        }
+        // Other ASCII punctuation is stripped
+    }
+
+    // Trim trailing dash
+    while (!slug.empty() && slug.back() == L'-')
+        slug.pop_back();
+
+    return slug;
+}
+
+// ============================================================================
 // IsHorizontalRule
 // ============================================================================
 bool MarkdownParser::IsHorizontalRule(const std::wstring& line)
@@ -524,6 +561,25 @@ std::wstring MarkdownParser::ConvertToHtml(const std::wstring& markdown)
             continue;
         }
 
+        // --- HTML anchor tag: <a id="..."></a> or <a name="..."></a> ---
+        // Pass through as raw HTML so internal links (#anchor) work
+        if (trimmed.size() >= 8 && trimmed[0] == L'<' && trimmed[1] == L'a' && trimmed[2] == L' ') {
+            // Check for <a id="..."></a> or <a name="..."></a> pattern
+            size_t closeTag = trimmed.find(L"</a>");
+            if (closeTag != std::wstring::npos) {
+                size_t idPos = trimmed.find(L"id=\"");
+                size_t namePos = trimmed.find(L"name=\"");
+                if (idPos != std::wstring::npos || namePos != std::wstring::npos) {
+                    flushParagraph();
+                    // Output the anchor tag as-is (raw HTML passthrough)
+                    html += trimmed;
+                    html += L"\n";
+                    i++;
+                    continue;
+                }
+            }
+        }
+
         // --- Fenced code block: ``` or ~~~ ---
         if (trimmed.size() >= 3 &&
             ((trimmed[0] == L'`' && trimmed[1] == L'`' && trimmed[2] == L'`') ||
@@ -617,7 +673,14 @@ std::wstring MarkdownParser::ConvertToHtml(const std::wstring& markdown)
                 while (te > 0 && headText[te - 1] == L' ') te--;
                 headText = headText.substr(0, te);
 
-                html += L"<h" + std::to_wstring(level) + L" data-line-start=\""
+                std::wstring slug = GenerateSlug(headText);
+                html += L"<h" + std::to_wstring(level);
+                if (!slug.empty()) {
+                    html += L" id=\"";
+                    html += HtmlEscape(slug);
+                    html += L"\"";
+                }
+                html += L" data-line-start=\""
                      + std::to_wstring((int)i) + L"\" data-line-end=\""
                      + std::to_wstring((int)i) + L"\">";
                 html += ProcessInline(headText);
@@ -815,7 +878,14 @@ std::wstring MarkdownParser::ConvertToHtml(const std::wstring& markdown)
             if (isH1 || isH2) {
                 flushParagraph();
                 int level = isH1 ? 1 : 2;
-                html += L"<h" + std::to_wstring(level) + L" data-line-start=\""
+                std::wstring slug = GenerateSlug(trimmed);
+                html += L"<h" + std::to_wstring(level);
+                if (!slug.empty()) {
+                    html += L" id=\"";
+                    html += HtmlEscape(slug);
+                    html += L"\"";
+                }
+                html += L" data-line-start=\""
                      + std::to_wstring((int)i) + L"\" data-line-end=\""
                      + std::to_wstring((int)(i + 1)) + L"\">";
                 html += ProcessInline(trimmed);
