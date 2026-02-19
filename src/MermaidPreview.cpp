@@ -412,6 +412,12 @@ void CMermaidFrame::OpenCustomBar(HWND hwndView, std::wstring prefetchedContent)
                 }
             });
 
+            // Register open-file callback (relative path link clicked)
+            m_pWebView->SetOpenFileCallback([this](const std::wstring& path) {
+                if (m_hWndLastView && IsWindow(m_hWndLastView))
+                    OnOpenFileLink(m_hWndLastView, path);
+            });
+
             // Optimization 3: Use pre-fetched content if available
             if (m_bHasPrefetch) {
                 m_pWebView->RenderContent(m_sPrefetchedHtml, m_bDarkMode);
@@ -786,6 +792,57 @@ void CMermaidFrame::OnPreviewNavigate(HWND hwndView, int line)
         KillTimer(m_hwndHost, IDT_SYNC_RESET_P2E);
         SetTimer(m_hwndHost, IDT_SYNC_RESET_P2E, SYNC_RESET_MS, nullptr);
     }
+}
+
+// ============================================================================
+// OnOpenFileLink - Open a relative-path file link in EmEditor
+// ============================================================================
+void CMermaidFrame::OnOpenFileLink(HWND hwndView, const std::wstring& relativePath)
+{
+    if (!hwndView || !IsWindow(hwndView))
+        return;
+
+    if (relativePath.empty())
+        return;
+
+    // 1. Get the current file's full path
+    WCHAR szPath[MAX_PATH] = {};
+    Editor_Info(hwndView, EI_GET_FILE_NAMEW, (LPARAM)szPath);
+    if (szPath[0] == L'\0')
+        return;
+
+    // 2. Get the directory of the current file
+    std::wstring dir = szPath;
+    size_t lastSlash = dir.find_last_of(L"\\/");
+    if (lastSlash == std::wstring::npos)
+        return;
+    dir = dir.substr(0, lastSlash);
+
+    // 3. Convert forward slashes in relativePath to backslashes
+    std::wstring relPath = relativePath;
+    for (auto& c : relPath) {
+        if (c == L'/') c = L'\\';
+    }
+
+    // 4. Combine: dir + relativePath
+    std::wstring fullPath = dir + L"\\" + relPath;
+
+    // 5. Canonicalize (resolve . and ..)
+    WCHAR canonical[MAX_PATH] = {};
+    DWORD len = GetFullPathNameW(fullPath.c_str(), MAX_PATH, canonical, nullptr);
+    if (len == 0 || len >= MAX_PATH)
+        return;
+
+    // 6. Verify file exists
+    DWORD attrs = GetFileAttributesW(canonical);
+    if (attrs == INVALID_FILE_ATTRIBUTES || (attrs & FILE_ATTRIBUTE_DIRECTORY))
+        return;
+
+    // 7. Open file in EmEditor (new tab, not replacing current file)
+    LOAD_FILE_INFO_EX lfi = {};
+    lfi.cbSize = sizeof(lfi);
+    lfi.nFlags = LFI_ALLOW_NEW_WINDOW;
+    Editor_LoadFileW(m_hWnd, &lfi, canonical);
 }
 
 // ============================================================================

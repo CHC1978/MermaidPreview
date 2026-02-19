@@ -10,7 +10,7 @@ using namespace Microsoft::WRL;
 extern HINSTANCE EEGetInstanceHandle();
 
 // HTML cache version tag — increment when BuildHtmlPage() content changes
-static const char* kHtmlVersionTag = "<!-- MermaidPreview-v11 -->";
+static const char* kHtmlVersionTag = "<!-- MermaidPreview-v13 -->";
 
 WebView2Manager::WebView2Manager() = default;
 
@@ -95,7 +95,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     // and avoid raw-string delimiter conflicts with JS code.
 
     // --- Part 1: CSS ---
-    std::wstring html = LR"P1(<!-- MermaidPreview-v11 -->
+    std::wstring html = LR"P1(<!-- MermaidPreview-v13 -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -346,14 +346,17 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       if(zoomTarget && !e.target.closest('.mermaid-container')){
         zoomTarget.classList.remove('zoom-active'); zoomTarget=null;
       }
-      // Handle internal anchor links (#section)
+      // Handle internal anchor links (#section) and relative file links
       var anchor = e.target.closest('a[href]');
       if(anchor){
         var href = anchor.getAttribute('href');
         if(href && href.charAt(0)==='#'){
           e.preventDefault();
           var target = document.getElementById(href.substring(1));
-          if(target) target.scrollIntoView({behavior:'smooth',block:'start'});
+          if(target) target.scrollIntoView({behavior:'instant',block:'start'});
+        } else if(href && !href.match(/^[a-zA-Z][a-zA-Z0-9+.\-]*:/) && window.chrome && window.chrome.webview){
+          e.preventDefault();
+          window.chrome.webview.postMessage({type:'openFile', path:href});
         }
       }
     });
@@ -713,6 +716,36 @@ void WebView2Manager::SetEditCallback(EditCallback callback)
                     return S_OK;
                 }
 
+                // Dispatch: openFile message (relative path link clicked)
+                if (json.find(L"\"openFile\"") != std::wstring::npos && m_openFileCallback) {
+                    // Extract "path" string value
+                    std::wstring filePath;
+                    size_t pathPos = json.find(L"\"path\"");
+                    if (pathPos != std::wstring::npos) {
+                        pathPos = json.find(L'"', pathPos + 6);
+                        if (pathPos != std::wstring::npos) {
+                            pathPos++;
+                            while (pathPos < json.size() && json[pathPos] != L'"') {
+                                if (json[pathPos] == L'\\' && pathPos + 1 < json.size()) {
+                                    switch (json[pathPos + 1]) {
+                                    case L'"':  filePath += L'"';  pathPos += 2; break;
+                                    case L'\\': filePath += L'\\'; pathPos += 2; break;
+                                    case L'/':  filePath += L'/';  pathPos += 2; break;
+                                    default:    filePath += json[pathPos]; pathPos++; break;
+                                    }
+                                } else {
+                                    filePath += json[pathPos];
+                                    pathPos++;
+                                }
+                            }
+                        }
+                    }
+                    if (!filePath.empty()) {
+                        m_openFileCallback(filePath);
+                    }
+                    return S_OK;
+                }
+
                 // Dispatch: edit message
                 if (json.find(L"\"edit\"") == std::wstring::npos || !m_editCallback)
                     return S_OK;
@@ -786,6 +819,11 @@ void WebView2Manager::SetScrollCallback(ScrollCallback callback)
 void WebView2Manager::SetNavigateCallback(NavigateCallback callback)
 {
     m_navigateCallback = std::move(callback);
+}
+
+void WebView2Manager::SetOpenFileCallback(OpenFileCallback callback)
+{
+    m_openFileCallback = std::move(callback);
 }
 
 // ============================================================================

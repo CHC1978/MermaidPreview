@@ -73,6 +73,9 @@ private:
     void OnPreviewScrolled(HWND hwndView, int line);
     void OnPreviewNavigate(HWND hwndView, int line);
 
+    // --- Open relative-path file link ---
+    void OnOpenFileLink(HWND hwndView, const std::wstring& relativePath);
+
     // --- Auto-open detection ---
     bool IsMarkdownFile(HWND hwndView) const;
     bool HasMermaidBlocks(HWND hwndView) const;

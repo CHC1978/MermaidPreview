@@ -63,6 +63,10 @@ public:
     using NavigateCallback = std::function<void(int line)>;
     void SetNavigateCallback(NavigateCallback callback);
 
+    // Set callback for opening relative-path file links from preview
+    using OpenFileCallback = std::function<void(const std::wstring& relativePath)>;
+    void SetOpenFileCallback(OpenFileCallback callback);
+
 private:
     // Build the HTML page shell (CSS + mermaid rendering JS)
     // mermaid.js is loaded from local extracted file
@@ -105,4 +109,5 @@ private:
     ThemeCallback m_themeCallback;
     ScrollCallback m_scrollCallback;
     NavigateCallback m_navigateCallback;
+    OpenFileCallback m_openFileCallback;
 };
