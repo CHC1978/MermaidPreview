@@ -114,4 +114,5 @@ private:
 
     // --- Settings ---
     int                             m_iBarPos = 2;
+    int                             m_iFontSize = 14;
 };

@@ -418,6 +418,17 @@ void CMermaidFrame::OpenCustomBar(HWND hwndView, std::wstring prefetchedContent)
                     OnOpenFileLink(m_hWndLastView, path);
             });
 
+            // Register font size callback (from right-click context menu)
+            m_pWebView->SetFontSizeCallback([this](int size) {
+                m_iFontSize = size;
+                SaveSettings();
+            });
+
+            // Restore font size if non-default
+            if (m_iFontSize != 14) {
+                m_pWebView->SetFontSize(m_iFontSize);
+            }
+
             // Optimization 3: Use pre-fetched content if available
             if (m_bHasPrefetch) {
                 m_pWebView->RenderContent(m_sPrefetchedHtml, m_bDarkMode);
@@ -953,6 +964,9 @@ void CMermaidFrame::LoadSettings()
         m_iBarPos = 2; // Clamp to valid Custom Bar positions
     m_bDarkMode = GetProfileInt(L"iDarkMode", 0) != 0;
     m_bDarkModeOverride = GetProfileInt(L"iDarkModeOverride", 0) != 0;
+    m_iFontSize = GetProfileInt(L"iFontSize", 14);
+    if (m_iFontSize < 8 || m_iFontSize > 32)
+        m_iFontSize = 14;
 }
 
 void CMermaidFrame::SaveSettings()
@@ -960,4 +974,5 @@ void CMermaidFrame::SaveSettings()
     WriteProfileInt(L"iPos", m_iBarPos);
     WriteProfileInt(L"iDarkMode", m_bDarkMode ? 1 : 0);
     WriteProfileInt(L"iDarkModeOverride", m_bDarkModeOverride ? 1 : 0);
+    WriteProfileInt(L"iFontSize", m_iFontSize);
 }

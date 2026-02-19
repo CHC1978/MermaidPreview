@@ -67,6 +67,13 @@ public:
     using OpenFileCallback = std::function<void(const std::wstring& relativePath)>;
     void SetOpenFileCallback(OpenFileCallback callback);
 
+    // Set callback for font size change from context menu
+    using FontSizeCallback = std::function<void(int size)>;
+    void SetFontSizeCallback(FontSizeCallback callback);
+
+    // Execute setFontSize(n) in WebView2
+    void SetFontSize(int size);
+
 private:
     // Build the HTML page shell (CSS + mermaid rendering JS)
     // mermaid.js is loaded from local extracted file
@@ -110,4 +117,5 @@ private:
     ScrollCallback m_scrollCallback;
     NavigateCallback m_navigateCallback;
     OpenFileCallback m_openFileCallback;
+    FontSizeCallback m_fontSizeCallback;
 };

@@ -10,7 +10,7 @@ using namespace Microsoft::WRL;
 extern HINSTANCE EEGetInstanceHandle();
 
 // HTML cache version tag — increment when BuildHtmlPage() content changes
-static const char* kHtmlVersionTag = "<!-- MermaidPreview-v13 -->";
+static const char* kHtmlVersionTag = "<!-- MermaidPreview-v14 -->";
 
 WebView2Manager::WebView2Manager() = default;
 
@@ -95,7 +95,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     // and avoid raw-string delimiter conflicts with JS code.
 
     // --- Part 1: CSS ---
-    std::wstring html = LR"P1(<!-- MermaidPreview-v13 -->
+    std::wstring html = LR"P1(<!-- MermaidPreview-v14 -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -189,6 +189,10 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     <div class="ctx-item ctx-action" data-action="zoom-in">Zoom In</div>
     <div class="ctx-item ctx-action" data-action="zoom-out">Zoom Out</div>
     <div class="ctx-item ctx-action" data-action="reset">Reset View</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item ctx-action" data-action="font-up">Font Size +</div>
+    <div class="ctx-item ctx-action" data-action="font-down">Font Size -</div>
+    <div class="ctx-item ctx-action" data-action="font-reset">Font Size Reset</div>
   </div>
 )P1a";
 
@@ -271,6 +275,30 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     };
     window.setTheme = function(dark) { document.body.className = dark ? 'dark' : 'light'; };
     window.clearContent = function() { document.getElementById('content').innerHTML = '<div class="empty">Open a Markdown file to preview</div>'; renderedMermaidSrcs = {}; _pendingRender = null; };
+
+    // ===== Font Size =====
+    var _fontSize = 14;
+    window.setFontSize = function(n) {
+      n = Math.max(8, Math.min(32, n));
+      _fontSize = n;
+      document.documentElement.style.fontSize = n + 'px';
+    };
+    function fontSizeChange(delta) {
+      var n = Math.max(8, Math.min(32, _fontSize + delta));
+      if (n === _fontSize) return;
+      _fontSize = n;
+      document.documentElement.style.fontSize = n + 'px';
+      if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage({type:'fontSize', size:n});
+      }
+    }
+    function fontSizeReset() {
+      _fontSize = 14;
+      document.documentElement.style.fontSize = '14px';
+      if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage({type:'fontSize', size:14});
+      }
+    }
 )P2";
 
     // --- Part 2: Scroll Sync + Editing + Context Menu + SVG Drag JS ---
@@ -364,7 +392,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     document.querySelectorAll('.ctx-theme').forEach(function(el){ el.addEventListener('click',function(){ switchTheme(this.dataset.dark==='true'); ctxMenu.style.display='none'; }); });
     document.querySelectorAll('.ctx-action').forEach(function(el){ el.addEventListener('click',function(){
       var a=this.dataset.action;
-      if(a==='zoom-in') svgZoomAll(1.25); else if(a==='zoom-out') svgZoomAll(0.8); else if(a==='reset') svgResetAll();
+      if(a==='zoom-in') svgZoomAll(1.25); else if(a==='zoom-out') svgZoomAll(0.8); else if(a==='reset') svgResetAll(); else if(a==='font-up') fontSizeChange(2); else if(a==='font-down') fontSizeChange(-2); else if(a==='font-reset') fontSizeReset();
       ctxMenu.style.display='none';
     }); });
 
@@ -702,6 +730,13 @@ void WebView2Manager::SetEditCallback(EditCallback callback)
                     return val;
                 };
 
+                // Dispatch: fontSize message
+                if (json.find(L"\"fontSize\"") != std::wstring::npos && m_fontSizeCallback) {
+                    int val = safeExtractLine(L"\"size\"");
+                    if (val >= 8 && val <= 32) m_fontSizeCallback(val);
+                    return S_OK;
+                }
+
                 // Dispatch: syncScroll message (Preview → Editor)
                 if (json.find(L"\"syncScroll\"") != std::wstring::npos && m_scrollCallback) {
                     int val = safeExtractLine(L"\"line\"");
@@ -824,6 +859,23 @@ void WebView2Manager::SetNavigateCallback(NavigateCallback callback)
 void WebView2Manager::SetOpenFileCallback(OpenFileCallback callback)
 {
     m_openFileCallback = std::move(callback);
+}
+
+void WebView2Manager::SetFontSizeCallback(FontSizeCallback callback)
+{
+    m_fontSizeCallback = std::move(callback);
+}
+
+void WebView2Manager::SetFontSize(int size)
+{
+    if (!m_bReady || !m_webview)
+        return;
+
+    if (size < 8) size = 8;
+    if (size > 32) size = 32;
+
+    std::wstring js = L"setFontSize(" + std::to_wstring(size) + L");";
+    m_webview->ExecuteScript(js.c_str(), nullptr);
 }
 
 // ============================================================================
