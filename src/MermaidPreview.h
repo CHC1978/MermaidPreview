@@ -53,7 +53,7 @@ public:
 
 private:
     // --- Custom Bar management ---
-    void OpenCustomBar(HWND hwndView);
+    void OpenCustomBar(HWND hwndView, std::wstring prefetchedContent = {});
     void CloseCustomBar(HWND hwndView);
     void OnCustomBarClosed(HWND hwndView, LPARAM lParam);
 
@@ -95,7 +95,7 @@ private:
     bool                            m_bParked = false;        // WebView2 is parked (hidden, not destroyed)
     bool                            m_bAutoOpened = false;
     std::unique_ptr<WebView2Manager> m_pWebView;
-    std::unique_ptr<BunRenderer>    m_pBunRenderer;
+    std::shared_ptr<BunRenderer>    m_pBunRenderer;
     std::wstring                    m_sLastContent;
     size_t                          m_nLastHash = 0;
     bool                            m_bDarkMode = false;

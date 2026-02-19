@@ -283,20 +283,21 @@ void CMermaidFrame::EnsureBunRenderer()
     }
 
     if (!m_pBunRenderer) {
-        m_pBunRenderer = std::make_unique<BunRenderer>();
+        m_pBunRenderer = std::make_shared<BunRenderer>();
     }
 
     // Launch Bun startup in background thread to avoid freezing UI
-    BunRenderer* pRenderer = m_pBunRenderer.get();
-    m_bunStartFuture = std::async(std::launch::async, [pRenderer]() {
-        return pRenderer->Start();
+    // Capture shared_ptr to prevent dangling pointer if m_pBunRenderer is reset
+    auto rendererPtr = m_pBunRenderer;
+    m_bunStartFuture = std::async(std::launch::async, [rendererPtr]() {
+        return rendererPtr->Start();
     });
 }
 
 // ============================================================================
 // OpenCustomBar
 // ============================================================================
-void CMermaidFrame::OpenCustomBar(HWND hwndView)
+void CMermaidFrame::OpenCustomBar(HWND hwndView, std::wstring prefetchedContent)
 {
     if (m_bVisible)
         return;
@@ -427,7 +428,10 @@ void CMermaidFrame::OpenCustomBar(HWND hwndView)
     // Optimization 3: Pre-fetch document content while WebView2 initializes async
     // This overlaps content preparation with the ~800-1500ms WebView2 startup
     {
-        std::wstring content = MarkdownParser::GetDocumentContent(hwndView);
+        // Use prefetched content if provided (from TryAutoOpen), else read fresh
+        std::wstring content = prefetchedContent.empty()
+            ? MarkdownParser::GetDocumentContent(hwndView)
+            : std::move(prefetchedContent);
         std::hash<std::wstring> hasher;
         m_nLastHash = hasher(content);
         m_sLastContent = content;
@@ -574,8 +578,13 @@ bool CMermaidFrame::HasMermaidBlocks(HWND hwndView) const
 void CMermaidFrame::TryAutoOpen(HWND hwndView)
 {
     if (m_bVisible) return;
-    if (IsMarkdownFile(hwndView) && HasMermaidBlocks(hwndView)) {
-        OpenCustomBar(hwndView);
+    if (!IsMarkdownFile(hwndView)) return;
+
+    // Read content once (avoids double read in HasMermaidBlocks + OpenCustomBar prefetch)
+    std::wstring content = MarkdownParser::GetDocumentContent(hwndView);
+    auto blocks = MarkdownParser::ExtractMermaidBlocks(content);
+    if (!blocks.empty()) {
+        OpenCustomBar(hwndView, std::move(content));
         m_bAutoOpened = true;
     }
 }
@@ -690,7 +699,7 @@ void CMermaidFrame::UpdatePreview(HWND hwndView)
                     html = html.substr(0, divStart) + svgDiv + html.substr(divEnd);
                 } else if (!r.error.empty()) {
                     std::wstring errDiv = L"<div " + attrs + L"><div class=\"mermaid-error\">Mermaid error: "
-                        + r.error + L"</div></div>";
+                        + MarkdownParser::HtmlEscape(r.error) + L"</div></div>";
                     html = html.substr(0, divStart) + errDiv + html.substr(divEnd);
                 }
             }
@@ -801,6 +810,10 @@ void CMermaidFrame::OnPreviewTextEdited(HWND hwndView, int lineStart, int lineEn
     if (lineEnd >= (int)totalLines)
         lineEnd = (int)totalLines - 1;
 
+    // Limit newText size (prevent massive paste from crashing EmEditor)
+    constexpr size_t MAX_EDIT_LENGTH = 1024 * 1024; // 1MB
+    if (newText.size() > MAX_EDIT_LENGTH) return;
+
     // Set caret at start of lineStart (no selection)
     POINT_PTR ptStart = {};
     ptStart.x = 0;
@@ -826,8 +839,12 @@ void CMermaidFrame::OnPreviewTextEdited(HWND hwndView, int lineStart, int lineEn
     }
     Editor_SetCaretPosEx(hwndView, POS_LOGICAL_W, &ptEnd, TRUE);
 
-    // Build replacement text (add newline at end if replacing full lines)
-    std::wstring replacement = newText;
+    // Build replacement text — strip null characters (c_str() would truncate)
+    std::wstring replacement;
+    replacement.reserve(newText.size());
+    for (wchar_t ch : newText) {
+        if (ch != L'\0') replacement += ch;
+    }
     if (lineEnd + 1 < (int)totalLines && !replacement.empty() &&
         replacement.back() != L'\n') {
         replacement += L"\n";

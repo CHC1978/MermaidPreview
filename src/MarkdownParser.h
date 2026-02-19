@@ -22,12 +22,12 @@ public:
     // Mermaid blocks become <div class="mermaid-container" data-mermaid-src="...">
     static std::wstring ConvertToHtml(const std::wstring& markdown);
 
+    // HTML-escape special characters (public for use by other modules)
+    static std::wstring HtmlEscape(const std::wstring& text);
+
 private:
     // Inline formatting: bold, italic, code, links, images, strikethrough
     static std::wstring ProcessInline(const std::wstring& text);
-
-    // HTML-escape special characters
-    static std::wstring HtmlEscape(const std::wstring& text);
 
     // URL-encode for data attributes
     static std::wstring UrlEncode(const std::wstring& text);

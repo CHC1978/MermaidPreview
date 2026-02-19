@@ -2,6 +2,7 @@
 #include "resource.h"
 #include <shlobj.h>
 #include <sstream>
+#include <climits>
 
 using namespace Microsoft::WRL;
 
@@ -9,7 +10,7 @@ using namespace Microsoft::WRL;
 extern HINSTANCE EEGetInstanceHandle();
 
 // HTML cache version tag — increment when BuildHtmlPage() content changes
-static const char* kHtmlVersionTag = "<!-- MermaidPreview-v10 -->";
+static const char* kHtmlVersionTag = "<!-- MermaidPreview-v11 -->";
 
 WebView2Manager::WebView2Manager() = default;
 
@@ -94,7 +95,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     // and avoid raw-string delimiter conflicts with JS code.
 
     // --- Part 1: CSS ---
-    std::wstring html = LR"P1(<!-- MermaidPreview-v10 -->
+    std::wstring html = LR"P1(<!-- MermaidPreview-v11 -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -227,7 +228,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
           el.innerHTML = result.svg;
           newSrcs[id] = { src: src, svg: result.svg };
         } catch(e) {
-          el.innerHTML = '<div class="mermaid-error">Mermaid: '+(e.message||e).toString().replace(/</g,'&lt;')+'</div>';
+          el.innerHTML = '<div class="mermaid-error">Mermaid: '+String(e.message||e).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')+'</div>';
           newSrcs[id] = { src: src, svg: el.innerHTML };
         }
       }
@@ -258,7 +259,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
             el.innerHTML = result.svg;
             newSrcs[id] = { src: src, svg: result.svg };
           } catch(e) {
-            el.innerHTML = '<div class="mermaid-error">Mermaid: '+(e.message||e).toString().replace(/</g,'&lt;')+'</div>';
+            el.innerHTML = '<div class="mermaid-error">Mermaid: '+String(e.message||e).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')+'</div>';
             newSrcs[id] = { src: src, svg: el.innerHTML };
           }
         }
@@ -455,6 +456,9 @@ std::wstring WebView2Manager::EscapeForJS(const std::wstring& input)
         case L'\r': result += L"\\r";  break;
         case L'\t': result += L"\\t";  break;
         case L'<':  result += L"\\x3C"; break;
+        case L'>':  result += L"\\x3E"; break;           // Prevent </script> injection
+        case L'\u2028': result += L"\\u2028"; break;     // Line Separator
+        case L'\u2029': result += L"\\u2029"; break;     // Paragraph Separator
         default:    result += ch;       break;
         }
     }
@@ -673,50 +677,9 @@ void WebView2Manager::SetEditCallback(EditCallback callback)
                     return S_OK;
                 }
 
-                // Dispatch: syncScroll message (Preview → Editor)
-                if (json.find(L"\"syncScroll\"") != std::wstring::npos && m_scrollCallback) {
-                    size_t linePos = json.find(L"\"line\"");
-                    if (linePos != std::wstring::npos) {
-                        linePos += 6;
-                        while (linePos < json.size() && (json[linePos] == L':' || json[linePos] == L' '))
-                            linePos++;
-                        int val = 0;
-                        bool found = false;
-                        while (linePos < json.size() && json[linePos] >= L'0' && json[linePos] <= L'9') {
-                            val = val * 10 + (json[linePos] - L'0');
-                            linePos++;
-                            found = true;
-                        }
-                        if (found) m_scrollCallback(val);
-                    }
-                    return S_OK;
-                }
-
-                // Dispatch: navigateToLine message (click mermaid → jump editor)
-                if (json.find(L"\"navigateToLine\"") != std::wstring::npos && m_navigateCallback) {
-                    size_t linePos = json.find(L"\"line\"");
-                    if (linePos != std::wstring::npos) {
-                        linePos += 6;
-                        while (linePos < json.size() && (json[linePos] == L':' || json[linePos] == L' '))
-                            linePos++;
-                        int val = 0;
-                        bool found = false;
-                        while (linePos < json.size() && json[linePos] >= L'0' && json[linePos] <= L'9') {
-                            val = val * 10 + (json[linePos] - L'0');
-                            linePos++;
-                            found = true;
-                        }
-                        if (found) m_navigateCallback(val);
-                    }
-                    return S_OK;
-                }
-
-                // Dispatch: edit message
-                if (json.find(L"\"edit\"") == std::wstring::npos || !m_editCallback)
-                    return S_OK;
-
-                // Parse lineStart and lineEnd
-                auto extractInt = [&](const std::wstring& key) -> int {
+                // Safe integer extraction with overflow protection
+                constexpr int MAX_LINE_NUMBER = 10000000;
+                auto safeExtractLine = [&](const std::wstring& key) -> int {
                     size_t pos = json.find(key);
                     if (pos == std::wstring::npos) return -1;
                     pos += key.size();
@@ -725,15 +688,38 @@ void WebView2Manager::SetEditCallback(EditCallback callback)
                     int val = 0;
                     bool found = false;
                     while (pos < json.size() && json[pos] >= L'0' && json[pos] <= L'9') {
-                        val = val * 10 + (json[pos] - L'0');
+                        int digit = json[pos] - L'0';
+                        if (val > (INT_MAX - digit) / 10)
+                            return -1; // Overflow
+                        val = val * 10 + digit;
                         pos++;
                         found = true;
                     }
-                    return found ? val : -1;
+                    if (!found || val > MAX_LINE_NUMBER) return -1;
+                    return val;
                 };
 
-                int lineStart = extractInt(L"\"lineStart\"");
-                int lineEnd = extractInt(L"\"lineEnd\"");
+                // Dispatch: syncScroll message (Preview → Editor)
+                if (json.find(L"\"syncScroll\"") != std::wstring::npos && m_scrollCallback) {
+                    int val = safeExtractLine(L"\"line\"");
+                    if (val >= 0) m_scrollCallback(val);
+                    return S_OK;
+                }
+
+                // Dispatch: navigateToLine message (click mermaid → jump editor)
+                if (json.find(L"\"navigateToLine\"") != std::wstring::npos && m_navigateCallback) {
+                    int val = safeExtractLine(L"\"line\"");
+                    if (val >= 0) m_navigateCallback(val);
+                    return S_OK;
+                }
+
+                // Dispatch: edit message
+                if (json.find(L"\"edit\"") == std::wstring::npos || !m_editCallback)
+                    return S_OK;
+
+                // Parse lineStart and lineEnd (reuse safeExtractLine)
+                int lineStart = safeExtractLine(L"\"lineStart\"");
+                int lineEnd = safeExtractLine(L"\"lineEnd\"");
 
                 // Extract newText string value
                 std::wstring newText;

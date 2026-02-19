@@ -4,6 +4,7 @@
 #include <cwctype>
 #include <algorithm>
 #include <sstream>
+#include <unordered_map>
 
 // ============================================================================
 // ExtractMermaidBlocks - unchanged from original
@@ -171,19 +172,30 @@ std::wstring MarkdownParser::UrlEncode(const std::wstring& text)
 // ============================================================================
 bool MarkdownParser::IsSafeUrl(const std::wstring& url)
 {
-    // Trim leading whitespace
+    // Trim leading whitespace (including \n, \r for multiline bypass prevention)
     size_t i = 0;
-    while (i < url.size() && (url[i] == L' ' || url[i] == L'\t')) i++;
+    while (i < url.size() && (url[i] == L' ' || url[i] == L'\t' ||
+           url[i] == L'\n' || url[i] == L'\r'))
+        i++;
     if (i >= url.size()) return true; // empty is safe (renders nothing)
 
     // Lowercase the scheme prefix for case-insensitive comparison
+    // Use 24 chars to cover the longest dangerous scheme
     std::wstring lower;
-    for (size_t j = i; j < url.size() && j < i + 16; j++)
+    for (size_t j = i; j < url.size() && j < i + 24; j++)
         lower += (wchar_t)towlower(url[j]);
 
-    if (lower.find(L"javascript:") == 0) return false;
-    if (lower.find(L"vbscript:") == 0) return false;
-    if (lower.find(L"data:") == 0) return false;
+    // Blacklist dangerous URL schemes
+    static const std::wstring kDangerousSchemes[] = {
+        L"javascript:", L"vbscript:", L"data:",
+        L"file:", L"ms-appx:", L"ms-its:",
+        L"mhtml:", L"ms-msdt:", L"ms-help:"
+    };
+    for (const auto& scheme : kDangerousSchemes) {
+        if (lower.size() >= scheme.size() &&
+            lower.substr(0, scheme.size()) == scheme)
+            return false;
+    }
 
     return true;
 }
@@ -532,6 +544,19 @@ std::wstring MarkdownParser::ConvertToHtml(const std::wstring& markdown)
     size_t n = lines.size();
     size_t i = 0;
     int mermaidIdx = 0;
+    std::unordered_map<std::wstring, int> slugCount; // Track duplicate heading IDs
+    auto uniqueSlug = [&](const std::wstring& text) -> std::wstring {
+        std::wstring slug = GenerateSlug(text);
+        if (slug.empty()) return slug;
+        auto it = slugCount.find(slug);
+        if (it != slugCount.end()) {
+            it->second++;
+            slug += L"-" + std::to_wstring(it->second);
+        } else {
+            slugCount[slug] = 0;
+        }
+        return slug;
+    };
 
     // Track if we're accumulating a paragraph
     std::wstring paraAccum;
@@ -562,18 +587,44 @@ std::wstring MarkdownParser::ConvertToHtml(const std::wstring& markdown)
         }
 
         // --- HTML anchor tag: <a id="..."></a> or <a name="..."></a> ---
-        // Pass through as raw HTML so internal links (#anchor) work
+        // Generate safe anchor HTML (no raw passthrough to prevent XSS)
         if (trimmed.size() >= 8 && trimmed[0] == L'<' && trimmed[1] == L'a' && trimmed[2] == L' ') {
-            // Check for <a id="..."></a> or <a name="..."></a> pattern
+            // Extract and validate id/name value with strict character whitelist
+            // Only allow: [A-Za-z0-9_\-\.] in the attribute value
+            auto extractSafeAnchorId = [](const std::wstring& tag) -> std::wstring {
+                // Try id="..." first, then name="..."
+                const wchar_t* attrs[] = { L"id=\"", L"name=\"" };
+                for (const wchar_t* attr : attrs) {
+                    size_t pos = tag.find(attr);
+                    if (pos == std::wstring::npos) continue;
+                    pos += wcslen(attr);
+                    size_t endQuote = tag.find(L'"', pos);
+                    if (endQuote == std::wstring::npos || endQuote == pos) continue;
+                    std::wstring val = tag.substr(pos, endQuote - pos);
+                    // Validate: only safe characters
+                    bool safe = true;
+                    for (wchar_t ch : val) {
+                        if (!((ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') ||
+                              (ch >= L'0' && ch <= L'9') || ch == L'-' || ch == L'_' ||
+                              ch == L'.' || ch > 0x7F)) {
+                            safe = false;
+                            break;
+                        }
+                    }
+                    if (safe) return val;
+                }
+                return L"";
+            };
+
             size_t closeTag = trimmed.find(L"</a>");
             if (closeTag != std::wstring::npos) {
-                size_t idPos = trimmed.find(L"id=\"");
-                size_t namePos = trimmed.find(L"name=\"");
-                if (idPos != std::wstring::npos || namePos != std::wstring::npos) {
+                std::wstring anchorId = extractSafeAnchorId(trimmed);
+                if (!anchorId.empty()) {
                     flushParagraph();
-                    // Output the anchor tag as-is (raw HTML passthrough)
-                    html += trimmed;
-                    html += L"\n";
+                    // Generate safe anchor (never pass raw HTML through)
+                    html += L"<a id=\"";
+                    html += HtmlEscape(anchorId);
+                    html += L"\"></a>\n";
                     i++;
                     continue;
                 }
@@ -673,7 +724,7 @@ std::wstring MarkdownParser::ConvertToHtml(const std::wstring& markdown)
                 while (te > 0 && headText[te - 1] == L' ') te--;
                 headText = headText.substr(0, te);
 
-                std::wstring slug = GenerateSlug(headText);
+                std::wstring slug = uniqueSlug(headText);
                 html += L"<h" + std::to_wstring(level);
                 if (!slug.empty()) {
                     html += L" id=\"";
@@ -878,7 +929,7 @@ std::wstring MarkdownParser::ConvertToHtml(const std::wstring& markdown)
             if (isH1 || isH2) {
                 flushParagraph();
                 int level = isH1 ? 1 : 2;
-                std::wstring slug = GenerateSlug(trimmed);
+                std::wstring slug = uniqueSlug(trimmed);
                 html += L"<h" + std::to_wstring(level);
                 if (!slug.empty()) {
                     html += L" id=\"";

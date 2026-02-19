@@ -215,7 +215,11 @@ for await (const chunk of Bun.stdin.stream()) {
             }
 
             if (req.type === 'render') {
-                const theme = req.theme || 'default';
+                // Validate theme (whitelist only)
+                const VALID_THEMES = ['default', 'dark', 'neutral', 'forest', 'base'];
+                const theme = (typeof req.theme === 'string' && VALID_THEMES.includes(req.theme))
+                    ? req.theme : 'default';
+
                 if (theme !== currentTheme) {
                     currentTheme = theme;
                     mermaid.initialize({
@@ -228,8 +232,25 @@ for await (const chunk of Bun.stdin.stream()) {
                 }
 
                 const results: Array<{ id: string; svg: string | null; error: string | null }> = [];
+                const blocks = Array.isArray(req.blocks) ? req.blocks : [];
+                const MAX_CODE_LENGTH = 100000; // 100KB per block
 
-                for (const block of req.blocks || []) {
+                for (const block of blocks) {
+                    // Validate block.id: must be string, alphanumeric + dash/underscore
+                    if (typeof block.id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(block.id)) {
+                        results.push({ id: String(block.id || 'invalid'), svg: null, error: 'Invalid block id' });
+                        continue;
+                    }
+                    // Validate block.code: must be string with length limit
+                    if (typeof block.code !== 'string') {
+                        results.push({ id: block.id, svg: null, error: 'Invalid block code type' });
+                        continue;
+                    }
+                    if (block.code.length > MAX_CODE_LENGTH) {
+                        results.push({ id: block.id, svg: null, error: 'Code too long' });
+                        continue;
+                    }
+
                     try {
                         dom.window.document.body.innerHTML = '<div id="container"></div>';
                         const { svg } = await mermaid.render(block.id, block.code);
