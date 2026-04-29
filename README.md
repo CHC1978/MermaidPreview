@@ -2,14 +2,16 @@
 
 A native EmEditor plug-in that renders live Mermaid diagrams and Markdown previews in a dockable sidebar panel.
 
-![Version](https://img.shields.io/badge/version-1.1.0-blue)
+![Version](https://img.shields.io/badge/version-1.2.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-orange)
+![Mermaid](https://img.shields.io/badge/mermaid-11.14.0-ff3670)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Features
 
-- **Live Mermaid Diagrams** — Flowcharts, sequence diagrams, class diagrams, Gantt charts, and all Mermaid-supported diagram types rendered in real-time
+- **Live Mermaid Diagrams** — Flowcharts, sequence diagrams, class diagrams, Gantt charts, state diagrams, ER diagrams, mindmaps, timelines, GitGraph, architecture diagrams, **Wardley Maps (beta)**, **TreeView**, and every other Mermaid-supported type, rendered in real time
+- **Mermaid 11.14 Neo Look** — Opt-in modern visual style with drop-shadows for flowcharts/class/state/sequence/mindmap/GitGraph; just add `%%{init: {'look': 'neo'}}%%` at the top of any diagram
 - **Native Markdown Rendering** — C++ built-in parser handles headings, lists, tables, code blocks, links, images, bold/italic, strikethrough, task lists, and blockquotes with zero external dependencies
 - **Bidirectional Scroll Sync** — Editor and preview scroll positions stay synchronized in both directions
 - **Inline Editing** — Double-click any text block in the preview to edit it directly; changes are written back to the editor
@@ -18,16 +20,17 @@ A native EmEditor plug-in that renders live Mermaid diagrams and Markdown previe
 - **SVG Pan & Zoom** — Ctrl+Click a diagram to activate zoom mode; Ctrl+Scroll to zoom directly; drag to pan
 - **Auto Open/Close** — Automatically opens when a Markdown file containing ` ```mermaid ` blocks is detected; closes when switching to non-Mermaid files or closing the tab
 - **Fast Reopen (Parking Window)** — When the preview is closed, WebView2 is parked in a hidden window instead of destroyed; reopening takes ~10ms instead of ~800-1500ms
+- **Non-blocking Bun Render** — Server-side mermaid rendering runs on a background thread with a 15 s safety timeout; the editor UI never freezes even when Bun stalls
 - **Dockable Panel** — Supports left, right, top, or bottom docking; position is persisted across sessions
-- **Security Hardened** — URL scheme validation blocks `javascript:`/`data:`/`vbscript:` in links; WebView2 host object injection disabled; line-number input validated
-- **Bun Pre-rendering** (Optional) — If [Bun](https://bun.sh) is installed, Mermaid diagrams are pre-rendered server-side for faster display
+- **Security Hardened** — Path-traversal guarded relative-link opener (`../../etc/passwd` is rejected); URL scheme deny-list blocks `javascript:` / `data:` / `vbscript:` / `blob:` / `file:`; WebMessage dispatch uses exact `type` matching to prevent type confusion; embedded null/control bytes rejected; OOM caps on every Bun pipe buffer (20 MB) and per-block SVG (10 MB); UTF-16 surrogate pairs preserved through URL encoding
+- **Bun Pre-rendering** (Optional) — If [Bun](https://bun.sh) v1.3+ is installed, Mermaid diagrams are pre-rendered server-side for faster display
 
 ## Architecture
 
 ```
 EmEditor
  └── MermaidPreview.dll (C++17 / MSVC)
-      ├── MermaidPreview   — Plugin lifecycle, Custom Bar, event handling
+      ├── MermaidPreview   — Plugin lifecycle, Custom Bar, async render coordination
       ├── MarkdownParser   — C++ native Markdown → HTML converter
       ├── WebView2Manager  — WebView2 initialization, JS interop, HTML shell
       └── BunRenderer      — Optional server-side Mermaid → SVG via Bun/jsdom
@@ -38,19 +41,23 @@ EmEditor
 
 ```
 Editor Text
-  → MarkdownParser::ConvertToHtml()      (C++ native, ~1ms)
-  → BunRenderer::RenderBlocks()          (optional, replaces mermaid placeholders with SVG)
-  → WebView2 renderContent()             (displays HTML + renders remaining mermaid via JS)
+  → MarkdownParser::ConvertToHtml()      (C++ native, ~1 ms)
+  → WebView2 renderContent(placeholders) (UI shows text immediately)
+  → BunRenderer::RenderBlocks()          (background thread, 50–500 ms typical)
+  → IDT_BUN_POLL fires when future is ready
+  → SpliceSvgIntoHtml() + WebView2 renderContent(SVG)
+  └─ Fallback: if Bun is unavailable, mermaid.js renders placeholders client-side.
 ```
 
 ### Performance Optimizations
 
 | Optimization | Description | Savings |
 |---|---|---|
-| **HTML Cache** | `preview.html` is cached on disk with a version tag; skips rebuild when unchanged | ~10-20ms |
-| **Async mermaid.js** | mermaid.min.js (~2MB) loads asynchronously; Markdown text appears immediately | ~200-500ms |
-| **Content Pre-fetch** | Document parsing runs in parallel with WebView2 initialization | ~10-50ms |
-| **Parking Window** | WebView2 is reparented to a hidden window on close instead of destroyed; reopen skips full init | ~800-1500ms |
+| **HTML Cache** | `preview.html` is cached on disk with a version tag; skips rebuild when unchanged | ~10–20 ms |
+| **Async mermaid.js** | mermaid.min.js (~3.1 MB) loads asynchronously; Markdown text appears immediately | ~200–500 ms |
+| **Content Pre-fetch** | Document parsing runs in parallel with WebView2 initialization | ~10–50 ms |
+| **Parking Window** | WebView2 is reparented to a hidden window on close instead of destroyed; reopen skips full init | ~800–1500 ms |
+| **Background Bun render** | `RenderBlocks` runs on `std::async` worker; UI thread polls via 40 ms timer; 15 s safety cap, dirty-flag re-trigger on rapid edits | UI never blocks |
 
 ## Requirements
 
@@ -59,7 +66,8 @@ Editor Text
 | **EmEditor** | Professional v20+ | Required for Custom Bar API |
 | **Windows** | 10 / 11 | WebView2 Runtime required |
 | **WebView2 Runtime** | Latest | Pre-installed on Windows 11; [download for Windows 10](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) |
-| **Bun** | v1.0+ | *Optional* — for server-side Mermaid pre-rendering |
+| **Mermaid** | 11.14.0 | Embedded in DLL as RCDATA — no separate install |
+| **Bun** | v1.3+ | *Optional* — for server-side Mermaid pre-rendering |
 
 ## Installation
 
@@ -127,12 +135,28 @@ cmake --build build-debug
 |---|---|
 | **Edit text** | Changes in the editor are reflected in the preview after a short delay |
 | **Double-click** preview text | Enables inline editing; press Enter to save, Escape to cancel |
-| **Right-click** preview | Opens context menu (theme toggle, zoom controls) |
+| **Right-click** preview | Opens context menu (theme toggle, zoom controls, font size) |
 | **Click** a diagram | Jumps the editor cursor to the corresponding source line |
 | **Ctrl+Click** a diagram | Activates zoom mode for that diagram |
 | **Ctrl+Scroll wheel** on a diagram | Zoom in/out directly (no need to activate zoom first) |
 | **Scroll wheel** on active diagram | Zoom in/out |
 | **Drag** an active diagram | Pan the diagram |
+
+### Enabling the Neo Look
+
+Add a single `%%{init}%%` directive at the top of any diagram:
+
+````markdown
+```mermaid
+%%{init: {'look': 'neo'}}%%
+flowchart TD
+    A[Start] --> B{Decide}
+    B -->|Yes| C[Done]
+    B -->|No|  D[Retry]
+```
+````
+
+Valid `look` values: `classic` (default), `neo`, `handDrawn`.
 
 ## Project Structure
 
@@ -147,7 +171,7 @@ MermaidPreview/
 │   └── resource.h           # Resource IDs
 ├── src/
 │   ├── DllMain.cpp          # DLL entry point
-│   ├── MermaidPreview.cpp   # Plugin main logic
+│   ├── MermaidPreview.cpp   # Plugin main logic, async render coordinator
 │   ├── MermaidPreview.h
 │   ├── MarkdownParser.cpp   # C++ Markdown → HTML
 │   ├── MarkdownParser.h
@@ -160,9 +184,9 @@ MermaidPreview/
 │   ├── icon_16.bmp          # 16x16 toolbar icon
 │   ├── icon_24.bmp          # 24x24 toolbar icon
 │   └── web/
-│       └── mermaid.min.js   # Embedded mermaid.js (~2MB)
+│       └── mermaid.min.js   # Embedded mermaid 11.14.0 (~3.1 MB)
 └── bun-renderer/
-    ├── package.json
+    ├── package.json         # mermaid 11.14, jsdom
     └── renderer.ts          # Bun-based mermaid renderer
 ```
 
@@ -170,11 +194,23 @@ MermaidPreview/
 
 1. **Plugin loads** → Registers as an EmEditor plug-in with toolbar button
 2. **User clicks button** → Creates a dockable Custom Bar with a child window
-3. **WebView2 initializes** → Loads a local HTML shell (`preview.html`) containing CSS and JavaScript
-4. **Markdown parsing** → `MarkdownParser` converts editor content to HTML with line-number tracking (`data-line-start`/`data-line-end` attributes)
-5. **Mermaid rendering** → Mermaid code blocks become `<div class="mermaid-container">` placeholders; optionally pre-rendered by Bun, otherwise rendered client-side by mermaid.js
-6. **Live updates** → `EVENT_MODIFIED` triggers debounced re-render; `EVENT_SCROLL` triggers scroll sync
+3. **WebView2 initializes** → Loads a local HTML shell containing CSS and a single `_mmdInit(theme, look)` helper that drives all `mermaid.initialize` call sites
+4. **Markdown parsing** → `MarkdownParser` converts editor content to HTML with line-number tracking (`data-line-start` / `data-line-end` attributes)
+5. **Mermaid rendering** — async path:
+   - Mermaid code blocks become `<div class="mermaid-container">` placeholders
+   - Placeholder HTML is shipped to WebView2 immediately so the user sees text
+   - `BunRenderer::RenderBlocks` runs on a worker thread; `IDT_BUN_POLL` fires every 40 ms on the UI thread
+   - When the future resolves, SVGs are spliced into the cached HTML and rendered; if rendering takes longer than 15 s the worker is abandoned and the WebView's client-side mermaid.js takes over
+6. **Live updates** — `EVENT_MODIFIED` triggers debounced re-render; `EVENT_SCROLL` triggers scroll sync; a `m_renderDirty` flag re-runs the pipeline if the document changed during a Bun render
 7. **Bidirectional sync** — Line-number attributes enable precise scroll mapping between editor and preview
+
+## Security & Robustness Highlights
+
+- **Path traversal**: relative-path file links are resolved with `GetFullPathNameW`, then bounded against the current document's directory via case-insensitive `_wcsnicmp` comparison; `[evil](../../Windows/System32/notepad.exe)` is rejected
+- **URL scheme deny-list**: `javascript:`, `vbscript:`, `data:`, `blob:`, `file:`, `ms-appx:`, `ms-its:`, `mhtml:`, `ms-msdt:`, `ms-help:`, plus null/control-byte rejection so `java\0script:` cannot smuggle past
+- **WebMessage type confusion**: a `"type"` field is extracted exactly once and dispatched on equality (`msgType == L"theme"`), preventing payloads that merely contain the string `"theme"` from hijacking the theme handler
+- **Resource caps**: 20 MB on the Bun stdout read buffer (kills runaway processes), 10 MB per spliced SVG, 15 s pipe timeout, recursive markdown depth ≤ 20
+- **Memory safety**: `std::async` worker captures `shared_ptr<BunRenderer>` so the renderer outlives any in-flight render; `CloseCustomBar` and `~CMermaidFrame` detach the future to a graveyard thread so the destructor cannot stall the UI close path or DLL unload
 
 ## License
 
@@ -182,7 +218,7 @@ MIT
 
 ## Credits
 
-- [Mermaid.js](https://mermaid.js.org/) — Diagram rendering engine
+- [Mermaid.js](https://mermaid.js.org/) — Diagram rendering engine (v11.14.0)
 - [Microsoft WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) — Embedded browser control
 - [Bun](https://bun.sh/) — JavaScript runtime for server-side rendering
 - [EmEditor](https://www.emeditor.com/) — Text editor and plug-in SDK
