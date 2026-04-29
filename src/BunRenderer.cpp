@@ -270,6 +270,11 @@ std::string BunRenderer::ReadLine(DWORD timeoutMs)
 {
     if (!m_hStdoutRead) return "";
 
+    // Hard cap on accumulated buffer size to prevent OOM if Bun goes berserk
+    // (crash loop, infinite output, no newline ever). 20 MB covers any
+    // realistic single-frame mermaid render response with margin.
+    constexpr size_t kMaxBufferBytes = 20 * 1024 * 1024;
+
     DWORD startTime = GetTickCount();
     char buf[4096];
 
@@ -310,6 +315,13 @@ std::string BunRenderer::ReadLine(DWORD timeoutMs)
             return "";
 
         m_readBuffer.append(buf, bytesRead);
+
+        // Buffer overflow guard: kill the runaway process and bail out.
+        if (m_readBuffer.size() > kMaxBufferBytes) {
+            m_readBuffer.clear();
+            Stop();
+            return "";
+        }
     }
 }
 
@@ -337,8 +349,11 @@ std::vector<MermaidRenderResult> BunRenderer::RenderBlocks(
     if (!SendLine(json))
         return results;
 
-    // Read response (timeout based on block count)
-    DWORD timeout = 5000 + (DWORD)blocks.size() * 3000;
+    // Read response. Cap the timeout at 15 s so a hung Bun can't freeze the
+    // EmEditor UI thread for minutes — the caller falls back to client-side
+    // rendering when this returns empty.
+    DWORD timeout = 5000 + (DWORD)blocks.size() * 1000;
+    if (timeout > 15000) timeout = 15000;
     std::string response = ReadLine(timeout);
 
     if (response.empty())
@@ -382,6 +397,10 @@ std::vector<MermaidRenderResult> BunRenderer::RenderBlocks(
                 // SVG string value - find the matching close quote (handle escaped quotes)
                 svgValStart++;
                 std::string svgStr;
+                // Per-block SVG cap: prevents a single malicious/runaway block
+                // from consuming unbounded memory during JSON unescape.
+                constexpr size_t kMaxSvgBytes = 10 * 1024 * 1024; // 10 MB
+                bool svgOverflow = false;
                 size_t si = svgValStart;
                 while (si < response.size()) {
                     if (response[si] == '\\' && si + 1 < response.size()) {
@@ -399,9 +418,18 @@ std::vector<MermaidRenderResult> BunRenderer::RenderBlocks(
                         svgStr += response[si];
                         si++;
                     }
+                    if (svgStr.size() > kMaxSvgBytes) { svgOverflow = true; break; }
                 }
-                r.svg = U8toW(svgStr);
-                pos = si + 1;
+                if (svgOverflow) {
+                    r.svg.clear();
+                    r.error = L"SVG too large";
+                    // Skip to the next block boundary
+                    size_t closeQ = response.find('"', si);
+                    pos = (closeQ != std::string::npos) ? closeQ + 1 : response.size();
+                } else {
+                    r.svg = U8toW(svgStr);
+                    pos = si + 1;
+                }
             } else if (response.substr(svgValStart, 4) == "null") {
                 pos = svgValStart + 4;
             }

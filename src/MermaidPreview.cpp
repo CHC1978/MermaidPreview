@@ -21,6 +21,7 @@
 #include "resource.h"
 #include <functional>
 #include <chrono>
+#include <thread>
 
 // ============================================================================
 // Custom Bar host window class name
@@ -82,12 +83,31 @@ LRESULT CALLBACK CMermaidFrame::HostWndProc(HWND hwnd, UINT msg, WPARAM wParam, 
             if (pFrame) pFrame->m_bSyncFromPreview = false;
             return 0;
         }
+        if (wParam == IDT_BUN_POLL) {
+            CMermaidFrame* pFrame = GetFrameFromHost(hwnd);
+            if (pFrame) pFrame->OnBunRenderComplete();
+            return 0;
+        }
         break;
     }
     case WM_DESTROY:
         return 0;
     }
     return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+// ============================================================================
+// ~CMermaidFrame - Detach any in-flight Bun render future before it would
+// otherwise block this destructor for up to 15 s. The worker holds a
+// shared_ptr<BunRenderer> so the renderer survives until the pipe drains.
+// ============================================================================
+CMermaidFrame::~CMermaidFrame()
+{
+    if (m_renderFuture.valid()) {
+        std::thread([f = std::move(m_renderFuture)]() mutable {
+            try { f.wait(); } catch (...) {}
+        }).detach();
+    }
 }
 
 // ============================================================================
@@ -471,6 +491,21 @@ void CMermaidFrame::CloseCustomBar(HWND /*hwndView*/)
         KillTimer(m_hwndHost, IDT_SCROLL_SYNC);
         KillTimer(m_hwndHost, IDT_SYNC_RESET_E2P);
         KillTimer(m_hwndHost, IDT_SYNC_RESET_P2E);
+        KillTimer(m_hwndHost, IDT_BUN_POLL);
+    }
+    m_renderDirty = false;
+    m_renderPendingHtml.clear();
+    m_renderPendingView = nullptr;
+
+    // Detach any in-flight Bun render. std::async(launch::async) futures
+    // *block in their destructor* until the shared state is ready — moving
+    // the future into a self-joining thread keeps the worker running but
+    // unblocks the UI close path. The worker holds a shared_ptr<BunRenderer>,
+    // so the renderer stays alive until the pipe drains naturally.
+    if (m_renderFuture.valid()) {
+        std::thread([f = std::move(m_renderFuture)]() mutable {
+            try { f.wait(); } catch (...) {}
+        }).detach();
     }
 
     // 2. Restore focus to EmEditor BEFORE parking WebView2.
@@ -525,7 +560,11 @@ void CMermaidFrame::OnCustomBarClosed(HWND /*hwndView*/, LPARAM lParam)
         KillTimer(m_hwndHost, IDT_SCROLL_SYNC);
         KillTimer(m_hwndHost, IDT_SYNC_RESET_E2P);
         KillTimer(m_hwndHost, IDT_SYNC_RESET_P2E);
+        KillTimer(m_hwndHost, IDT_BUN_POLL);
     }
+    m_renderDirty = false;
+    m_renderPendingHtml.clear();
+    m_renderPendingView = nullptr;
 
     // Restore focus before parking (WebView2 browser process may own focus)
     if (m_hWnd && IsWindow(m_hWnd))
@@ -592,6 +631,12 @@ bool CMermaidFrame::HasMermaidBlocks(HWND hwndView) const
     return !blocks.empty();
 }
 
+// TryAutoClose was wired to no caller (audit v2 LOW-4.4). The auto-close
+// behaviour is undesirable in practice — a user transiently deleting a
+// mermaid block while editing should not yank the preview panel — so the
+// dead function is intentionally removed. Manual close still works via
+// the toolbar button.
+
 void CMermaidFrame::TryAutoOpen(HWND hwndView)
 {
     if (m_bVisible) return;
@@ -606,17 +651,79 @@ void CMermaidFrame::TryAutoOpen(HWND hwndView)
     }
 }
 
-void CMermaidFrame::TryAutoClose(HWND hwndView)
+// ============================================================================
+// SpliceSvgIntoHtml - Replace `<div class="mermaid-container">` placeholders
+// with the SVG (or error block) that Bun produced. Pure string surgery; safe
+// to call on either the UI thread or after a background render completes.
+// ============================================================================
+void CMermaidFrame::SpliceSvgIntoHtml(std::wstring& html,
+                                      const std::vector<MermaidRenderResult>& results)
 {
-    if (!m_bVisible || !m_bAutoOpened) return;
-    if (!IsMarkdownFile(hwndView) || !HasMermaidBlocks(hwndView)) {
-        CloseCustomBar(hwndView);
-        m_bAutoOpened = false;
+    for (auto& r : results) {
+        std::wstring placeholder = L"data-mermaid-id=\"" + r.id + L"\"";
+        size_t pos = html.find(placeholder);
+        if (pos == std::wstring::npos) continue;
+
+        size_t divStart = html.rfind(L"<div ", pos);
+        size_t divEnd = html.find(L"</div>", pos);
+        if (divStart == std::wstring::npos || divEnd == std::wstring::npos) continue;
+        divEnd += 6;
+
+        std::wstring origDiv = html.substr(divStart, divEnd - divStart);
+        std::wstring dataSrc, dataLineStart, dataLineEnd;
+        size_t srcAttr = origDiv.find(L"data-mermaid-src=\"");
+        if (srcAttr != std::wstring::npos) {
+            srcAttr += 18;
+            size_t srcEnd = origDiv.find(L'"', srcAttr);
+            if (srcEnd != std::wstring::npos)
+                dataSrc = origDiv.substr(srcAttr, srcEnd - srcAttr);
+        }
+        size_t lsAttr = origDiv.find(L"data-line-start=\"");
+        if (lsAttr != std::wstring::npos) {
+            lsAttr += 17;
+            size_t lsEnd = origDiv.find(L'"', lsAttr);
+            if (lsEnd != std::wstring::npos)
+                dataLineStart = origDiv.substr(lsAttr, lsEnd - lsAttr);
+        }
+        size_t leAttr = origDiv.find(L"data-line-end=\"");
+        if (leAttr != std::wstring::npos) {
+            leAttr += 15;
+            size_t leEnd = origDiv.find(L'"', leAttr);
+            if (leEnd != std::wstring::npos)
+                dataLineEnd = origDiv.substr(leAttr, leEnd - leAttr);
+        }
+
+        std::wstring attrs = L"class=\"mermaid-container\" data-mermaid-id=\"" + r.id + L"\"";
+        if (!dataSrc.empty())       attrs += L" data-mermaid-src=\"" + dataSrc + L"\"";
+        if (!dataLineStart.empty()) attrs += L" data-line-start=\"" + dataLineStart + L"\"";
+        if (!dataLineEnd.empty())   attrs += L" data-line-end=\"" + dataLineEnd + L"\"";
+
+        if (!r.svg.empty()) {
+            std::wstring svgDiv = L"<div " + attrs + L">" + r.svg + L"</div>";
+            html = html.substr(0, divStart) + svgDiv + html.substr(divEnd);
+        } else if (!r.error.empty()) {
+            std::wstring errDiv = L"<div " + attrs + L"><div class=\"mermaid-error\">Mermaid error: "
+                + MarkdownParser::HtmlEscape(r.error) + L"</div></div>";
+            html = html.substr(0, divStart) + errDiv + html.substr(divEnd);
+        }
     }
 }
 
 // ============================================================================
 // UpdatePreview - Hybrid: C++ markdown + Bun mermaid SVG (fallback: WebView2 JS)
+//
+// Bun's RenderBlocks call can take ~50–500 ms (or up to 15 s if Bun hangs),
+// so it must NOT run on the UI thread. The flow:
+//
+//   1. Parse markdown → HTML synchronously (cheap, ~1 ms).
+//   2. If a previous Bun job is still running, set m_renderDirty and bail —
+//      the polling timer (IDT_BUN_POLL) will re-trigger UpdatePreview after
+//      the in-flight job completes, picking up the latest editor content.
+//   3. Otherwise, render the placeholder HTML immediately so the user sees
+//      text without waiting for Bun, then kick off RenderBlocks on a worker
+//      thread via std::async + start IDT_BUN_POLL to splice in the SVG.
+//   4. If Bun isn't available at all, render once and we're done (the JS-side
+//      mermaid.js will handle the placeholders client-side).
 // ============================================================================
 void CMermaidFrame::UpdatePreview(HWND hwndView)
 {
@@ -633,6 +740,14 @@ void CMermaidFrame::UpdatePreview(HWND hwndView)
         }
     }
 
+    // If a Bun render is already in flight, mark dirty and bail. The poll
+    // timer will re-enter UpdatePreview when the future resolves.
+    if (m_renderFuture.valid() &&
+        m_renderFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+        m_renderDirty = true;
+        return;
+    }
+
     std::wstring content = MarkdownParser::GetDocumentContent(hwndView);
 
     // Quick hash comparison
@@ -647,88 +762,96 @@ void CMermaidFrame::UpdatePreview(HWND hwndView)
     // C++ native: convert markdown to HTML with line tracking
     std::wstring html = MarkdownParser::ConvertToHtml(content);
 
-    // Try Bun renderer for mermaid blocks (pre-render to SVG)
-    if (m_bBunAvailable && m_pBunRenderer && m_pBunRenderer->IsReady()) {
-        auto mermaidBlocks = MarkdownParser::ExtractMermaidBlocks(content);
-
-        if (!mermaidBlocks.empty()) {
-            std::vector<std::pair<std::wstring, std::wstring>> bunBlocks;
-            for (size_t i = 0; i < mermaidBlocks.size(); i++) {
-                bunBlocks.push_back({
-                    L"mermaid-placeholder-" + std::to_wstring(i),
-                    mermaidBlocks[i].code
-                });
-            }
-
-            std::wstring theme = m_bDarkMode ? L"dark" : L"default";
-            auto results = m_pBunRenderer->RenderBlocks(bunBlocks, theme);
-
-            // Replace mermaid placeholders with pre-rendered SVG
-            for (auto& r : results) {
-                std::wstring placeholder = L"data-mermaid-id=\"" + r.id + L"\"";
-                size_t pos = html.find(placeholder);
-                if (pos == std::wstring::npos) continue;
-
-                // Find the container div boundaries
-                size_t divStart = html.rfind(L"<div ", pos);
-                size_t divEnd = html.find(L"</div>", pos);
-                if (divStart == std::wstring::npos || divEnd == std::wstring::npos) continue;
-                divEnd += 6; // Include </div>
-
-                // Extract data-mermaid-src and line tracking from original div
-                std::wstring origDiv = html.substr(divStart, divEnd - divStart);
-                std::wstring dataSrc;
-                size_t srcAttr = origDiv.find(L"data-mermaid-src=\"");
-                if (srcAttr != std::wstring::npos) {
-                    srcAttr += 18;
-                    size_t srcEnd = origDiv.find(L'"', srcAttr);
-                    if (srcEnd != std::wstring::npos)
-                        dataSrc = origDiv.substr(srcAttr, srcEnd - srcAttr);
-                }
-
-                // Preserve data-line-start and data-line-end for editing
-                std::wstring dataLineStart, dataLineEnd;
-                size_t lsAttr = origDiv.find(L"data-line-start=\"");
-                if (lsAttr != std::wstring::npos) {
-                    lsAttr += 17;
-                    size_t lsEnd = origDiv.find(L'"', lsAttr);
-                    if (lsEnd != std::wstring::npos)
-                        dataLineStart = origDiv.substr(lsAttr, lsEnd - lsAttr);
-                }
-                size_t leAttr = origDiv.find(L"data-line-end=\"");
-                if (leAttr != std::wstring::npos) {
-                    leAttr += 15;
-                    size_t leEnd = origDiv.find(L'"', leAttr);
-                    if (leEnd != std::wstring::npos)
-                        dataLineEnd = origDiv.substr(leAttr, leEnd - leAttr);
-                }
-
-                std::wstring attrs = L"class=\"mermaid-container\" data-mermaid-id=\"" + r.id + L"\"";
-                if (!dataSrc.empty())
-                    attrs += L" data-mermaid-src=\"" + dataSrc + L"\"";
-                if (!dataLineStart.empty())
-                    attrs += L" data-line-start=\"" + dataLineStart + L"\"";
-                if (!dataLineEnd.empty())
-                    attrs += L" data-line-end=\"" + dataLineEnd + L"\"";
-
-                if (!r.svg.empty()) {
-                    std::wstring svgDiv = L"<div " + attrs + L">" + r.svg + L"</div>";
-                    html = html.substr(0, divStart) + svgDiv + html.substr(divEnd);
-                } else if (!r.error.empty()) {
-                    std::wstring errDiv = L"<div " + attrs + L"><div class=\"mermaid-error\">Mermaid error: "
-                        + MarkdownParser::HtmlEscape(r.error) + L"</div></div>";
-                    html = html.substr(0, divStart) + errDiv + html.substr(divEnd);
-                }
-            }
-        }
+    // Decide whether to dispatch Bun
+    bool useBun = m_bBunAvailable && m_pBunRenderer && m_pBunRenderer->IsReady();
+    std::vector<MermaidBlock> mermaidBlocks;
+    if (useBun) {
+        mermaidBlocks = MarkdownParser::ExtractMermaidBlocks(content);
+        if (mermaidBlocks.empty()) useBun = false;
     }
-    // If Bun not available, mermaid placeholders remain in HTML
-    // and WebView2's mermaid.js will handle them (fallback)
 
+    if (!useBun) {
+        // No Bun → ship HTML now; client-side mermaid.js handles placeholders.
+        m_pWebView->RenderContent(html, m_bDarkMode);
+        SyncScrollToPreview(hwndView);
+        return;
+    }
+
+    // Show text + placeholders immediately (sub-second perceived latency).
+    // The client-side mermaid.js will start rendering them; we'll overwrite
+    // with server-side SVG when Bun completes.
     m_pWebView->RenderContent(html, m_bDarkMode);
-
-    // After content update, sync preview scroll to editor's current position
     SyncScrollToPreview(hwndView);
+
+    // Capture render context for the completion handler.
+    m_renderPendingHtml = std::move(html);
+    m_renderPendingDark = m_bDarkMode;
+    m_renderPendingView = hwndView;
+
+    std::vector<std::pair<std::wstring, std::wstring>> bunBlocks;
+    bunBlocks.reserve(mermaidBlocks.size());
+    for (size_t i = 0; i < mermaidBlocks.size(); i++) {
+        bunBlocks.push_back({
+            L"mermaid-placeholder-" + std::to_wstring(i),
+            mermaidBlocks[i].code
+        });
+    }
+    std::wstring theme = m_bDarkMode ? L"dark" : L"default";
+
+    // Capture renderer by shared_ptr — keeps BunRenderer alive even if
+    // CMermaidFrame is being torn down while the worker is mid-pipe.
+    auto renderer = m_pBunRenderer;
+    m_renderFuture = std::async(std::launch::async,
+        [renderer, blocks = std::move(bunBlocks), theme]() {
+            return renderer->RenderBlocks(blocks, theme);
+        });
+
+    if (m_hwndHost) {
+        SetTimer(m_hwndHost, IDT_BUN_POLL, BUN_POLL_MS, nullptr);
+    }
+}
+
+// ============================================================================
+// OnBunRenderComplete - IDT_BUN_POLL fires every BUN_POLL_MS ms while a
+// background Bun render is in flight. When the future resolves, splice the
+// SVGs into the cached HTML and re-render. If the document changed while Bun
+// was working (m_renderDirty), kick off another UpdatePreview pass.
+// ============================================================================
+void CMermaidFrame::OnBunRenderComplete()
+{
+    if (!m_renderFuture.valid()) {
+        if (m_hwndHost) KillTimer(m_hwndHost, IDT_BUN_POLL);
+        return;
+    }
+    if (m_renderFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+        return; // still working — keep polling
+
+    std::vector<MermaidRenderResult> results;
+    try {
+        results = m_renderFuture.get();
+    } catch (...) {
+        // Swallow worker exceptions; client-side mermaid.js already drew
+        // something on the placeholder path so the user isn't stuck.
+        results.clear();
+    }
+    if (m_hwndHost) KillTimer(m_hwndHost, IDT_BUN_POLL);
+
+    // Bun returned (or timed out). If we got SVGs, splice and re-render.
+    if (!results.empty() && m_pWebView) {
+        std::wstring html = std::move(m_renderPendingHtml);
+        SpliceSvgIntoHtml(html, results);
+        m_pWebView->RenderContent(html, m_renderPendingDark);
+    }
+    m_renderPendingHtml.clear();
+    m_renderPendingView = nullptr;
+
+    // If the editor changed while Bun was working, run another pass now
+    // so the preview catches up with the latest content.
+    if (m_renderDirty) {
+        m_renderDirty = false;
+        if (m_hWndLastView && IsWindow(m_hWndLastView))
+            UpdatePreview(m_hWndLastView);
+    }
 }
 
 // ============================================================================
@@ -844,6 +967,25 @@ void CMermaidFrame::OnOpenFileLink(HWND hwndView, const std::wstring& relativePa
     if (len == 0 || len >= MAX_PATH)
         return;
 
+    // 5b. Boundary check: canonical must be inside the current document's
+    //     directory (or a subdirectory). Blocks `../../etc/passwd` style
+    //     traversal even after GetFullPathNameW collapsed the dots.
+    WCHAR canonDir[MAX_PATH] = {};
+    DWORD dirLen = GetFullPathNameW(dir.c_str(), MAX_PATH, canonDir, nullptr);
+    if (dirLen == 0 || dirLen >= MAX_PATH)
+        return;
+    std::wstring canonStr = canonical;
+    std::wstring canonDirStr = canonDir;
+    // Normalise trailing slash on the directory side so "C:\\foo" matches
+    // "C:\\foo\\bar.md" but not "C:\\foobar\\evil.md".
+    if (canonDirStr.empty() || canonDirStr.back() != L'\\')
+        canonDirStr += L'\\';
+    if (canonStr.size() < canonDirStr.size())
+        return;
+    // Case-insensitive prefix check (Windows paths are case-insensitive).
+    if (_wcsnicmp(canonStr.c_str(), canonDirStr.c_str(), canonDirStr.size()) != 0)
+        return;
+
     // 6. Verify file exists
     DWORD attrs = GetFileAttributesW(canonical);
     if (attrs == INVALID_FILE_ATTRIBUTES || (attrs & FILE_ATTRIBUTE_DIRECTORY))
@@ -956,9 +1098,18 @@ bool CMermaidFrame::IsDarkMode(HWND hwndView) const
 
 // ============================================================================
 // Registry persistence
+//
+// `iSchemaVersion` is the anchor for future migrations (audit v2 LOW-4.5).
+// Bump when key names or value semantics change incompatibly; LoadSettings
+// can then branch on the read value to migrate from older layouts.
 // ============================================================================
+constexpr int kSettingsSchemaVersion = 1;
+
 void CMermaidFrame::LoadSettings()
 {
+    int schemaVersion = GetProfileInt(L"iSchemaVersion", 0);
+    (void)schemaVersion; // currently no migration paths; placeholder for v2+
+
     m_iBarPos = GetProfileInt(L"iPos", 2);
     if (m_iBarPos < 0 || m_iBarPos > 3)
         m_iBarPos = 2; // Clamp to valid Custom Bar positions
@@ -971,6 +1122,7 @@ void CMermaidFrame::LoadSettings()
 
 void CMermaidFrame::SaveSettings()
 {
+    WriteProfileInt(L"iSchemaVersion", kSettingsSchemaVersion);
     WriteProfileInt(L"iPos", m_iBarPos);
     WriteProfileInt(L"iDarkMode", m_bDarkMode ? 1 : 0);
     WriteProfileInt(L"iDarkModeOverride", m_bDarkModeOverride ? 1 : 0);

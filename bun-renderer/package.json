@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "mermaid": "^11.0.0",
+    "mermaid": "^11.14.0",
     "jsdom": "^25.0.0"
   }
 }

@@ -134,9 +134,15 @@ std::wstring MarkdownParser::HtmlEscape(const std::wstring& text)
 // ============================================================================
 std::wstring MarkdownParser::UrlEncode(const std::wstring& text)
 {
+    // Index-based loop so we can pair UTF-16 surrogates. Feeding a lone
+    // high-surrogate (U+D800–U+DBFF) to WideCharToMultiByte produces a
+    // U+FFFD replacement, which would corrupt emoji etc. inside mermaid
+    // labels (audit v2 LOW-4.7).
     std::wstring out;
     out.reserve(text.size() * 2);
-    for (wchar_t ch : text) {
+    const size_t n = text.size();
+    for (size_t i = 0; i < n; ++i) {
+        wchar_t ch = text[i];
         if ((ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') ||
             (ch >= L'0' && ch <= L'9') || ch == L'-' || ch == L'_' ||
             ch == L'.' || ch == L'~' || ch == L' ') {
@@ -154,13 +160,27 @@ std::wstring MarkdownParser::UrlEncode(const std::wstring& text)
             swprintf_s(buf, L"%%%02X", (unsigned)ch);
             out += buf;
         } else {
-            // Multi-byte: convert to UTF-8 then percent-encode each byte
+            // Non-ASCII: encode as UTF-8. Pair UTF-16 high+low surrogate
+            // when present; lone surrogates fall through to the 1-wchar
+            // path and WideCharToMultiByte will emit U+FFFD (the only
+            // sane recovery for malformed input).
+            wchar_t buf[2] = { ch, 0 };
+            int wlen = 1;
+            if (ch >= 0xD800 && ch <= 0xDBFF && i + 1 < n) {
+                wchar_t low = text[i + 1];
+                if (low >= 0xDC00 && low <= 0xDFFF) {
+                    buf[1] = low;
+                    wlen = 2;
+                    ++i; // consume the low surrogate too
+                }
+            }
             char utf8[8] = {};
-            int len = WideCharToMultiByte(CP_UTF8, 0, &ch, 1, utf8, sizeof(utf8), nullptr, nullptr);
-            for (int i = 0; i < len; i++) {
-                wchar_t buf[8];
-                swprintf_s(buf, L"%%%02X", (unsigned char)utf8[i]);
-                out += buf;
+            int len = WideCharToMultiByte(CP_UTF8, 0, buf, wlen,
+                                          utf8, sizeof(utf8), nullptr, nullptr);
+            for (int k = 0; k < len; k++) {
+                wchar_t hex[8];
+                swprintf_s(hex, L"%%%02X", (unsigned char)utf8[k]);
+                out += hex;
             }
         }
     }
@@ -179,15 +199,21 @@ bool MarkdownParser::IsSafeUrl(const std::wstring& url)
         i++;
     if (i >= url.size()) return true; // empty is safe (renders nothing)
 
-    // Lowercase the scheme prefix for case-insensitive comparison
-    // Use 24 chars to cover the longest dangerous scheme
+    // Lowercase the scheme prefix for case-insensitive comparison.
+    // Use 24 chars to cover the longest dangerous scheme. Reject embedded
+    // null bytes / control chars (`java\0script:`) outright instead of
+    // letting them silently truncate the comparison string.
     std::wstring lower;
-    for (size_t j = i; j < url.size() && j < i + 24; j++)
-        lower += (wchar_t)towlower(url[j]);
+    for (size_t j = i; j < url.size() && j < i + 24; j++) {
+        wchar_t c = url[j];
+        if (c == L'\0' || (c < L' ' && c != L'\t')) return false;
+        lower += (wchar_t)towlower(c);
+    }
 
-    // Blacklist dangerous URL schemes
+    // Blacklist dangerous URL schemes. `blob:` can run arbitrary JS via
+    // URL.createObjectURL, so it must be on the same denylist.
     static const std::wstring kDangerousSchemes[] = {
-        L"javascript:", L"vbscript:", L"data:",
+        L"javascript:", L"vbscript:", L"data:", L"blob:",
         L"file:", L"ms-appx:", L"ms-its:",
         L"mhtml:", L"ms-msdt:", L"ms-help:"
     };
@@ -317,8 +343,14 @@ std::vector<std::wstring> MarkdownParser::ParseTableRow(const std::wstring& line
 // ============================================================================
 // ProcessInline - Handle inline formatting
 // ============================================================================
-std::wstring MarkdownParser::ProcessInline(const std::wstring& text)
+std::wstring MarkdownParser::ProcessInline(const std::wstring& text, int depth)
 {
+    // Recursion fuse: malicious markdown like `**[**x**](u)**` recurses
+    // through inline → link-text → bold/italic etc. Cap the depth and
+    // fall back to plain HTML-escape so we cannot trigger
+    // STATUS_STACK_OVERFLOW (uncatchable on Windows).
+    if (depth > 20) return HtmlEscape(text);
+
     std::wstring out;
     out.reserve(text.size() + text.size() / 4);
     size_t len = text.size();
@@ -421,10 +453,10 @@ std::wstring MarkdownParser::ProcessInline(const std::wstring& text)
                         out += L"<a href=\"";
                         out += HtmlEscape(url);
                         out += L"\">";
-                        out += ProcessInline(linkText);
+                        out += ProcessInline(linkText, depth + 1);
                         out += L"</a>";
                     } else {
-                        out += ProcessInline(linkText);
+                        out += ProcessInline(linkText, depth + 1);
                     }
                     i = urlEnd + 1;
                     continue;
@@ -437,7 +469,7 @@ std::wstring MarkdownParser::ProcessInline(const std::wstring& text)
             size_t end = text.find(L"***", i + 3);
             if (end != std::wstring::npos) {
                 out += L"<strong><em>";
-                out += ProcessInline(text.substr(i + 3, end - i - 3));
+                out += ProcessInline(text.substr(i + 3, end - i - 3), depth + 1);
                 out += L"</em></strong>";
                 i = end + 3;
                 continue;
@@ -449,7 +481,7 @@ std::wstring MarkdownParser::ProcessInline(const std::wstring& text)
             size_t end = text.find(L"**", i + 2);
             if (end != std::wstring::npos) {
                 out += L"<strong>";
-                out += ProcessInline(text.substr(i + 2, end - i - 2));
+                out += ProcessInline(text.substr(i + 2, end - i - 2), depth + 1);
                 out += L"</strong>";
                 i = end + 2;
                 continue;
@@ -461,7 +493,7 @@ std::wstring MarkdownParser::ProcessInline(const std::wstring& text)
             size_t end = text.find(L'*', i + 1);
             if (end != std::wstring::npos && text[end - 1] != L' ') {
                 out += L"<em>";
-                out += ProcessInline(text.substr(i + 1, end - i - 1));
+                out += ProcessInline(text.substr(i + 1, end - i - 1), depth + 1);
                 out += L"</em>";
                 i = end + 1;
                 continue;
@@ -473,7 +505,7 @@ std::wstring MarkdownParser::ProcessInline(const std::wstring& text)
             size_t end = text.find(L"~~", i + 2);
             if (end != std::wstring::npos) {
                 out += L"<del>";
-                out += ProcessInline(text.substr(i + 2, end - i - 2));
+                out += ProcessInline(text.substr(i + 2, end - i - 2), depth + 1);
                 out += L"</del>";
                 i = end + 2;
                 continue;

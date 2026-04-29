@@ -71,17 +71,24 @@ bool WebView2Manager::ExtractMermaidJs()
     if (!data || size == 0)
         return false;
 
-    // Write to file
+    // Write to file. If WriteFile fails or only writes part of the buffer
+    // (disk full, antivirus interference, ...), delete the half-written
+    // file so the next launch re-extracts a fresh copy instead of loading
+    // a truncated mermaid.min.js (which would silently corrupt rendering).
     HANDLE hFile = CreateFileW(mermaidPath.c_str(), GENERIC_WRITE, 0, nullptr,
                                CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hFile == INVALID_HANDLE_VALUE)
         return false;
 
     DWORD written = 0;
-    WriteFile(hFile, data, size, &written, nullptr);
+    BOOL writeOk = WriteFile(hFile, data, size, &written, nullptr);
     CloseHandle(hFile);
 
-    return written == size;
+    if (!writeOk || written != size) {
+        DeleteFileW(mermaidPath.c_str());
+        return false;
+    }
+    return true;
 }
 
 // ============================================================================
@@ -203,12 +210,27 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     var zoomTarget = null;
     var _pendingRender = null;
 
+    // Single chokepoint for mermaid.initialize (11.14+ feature surface).
+    // theme: 'default' | 'dark' | 'neutral' | 'forest' | 'base'
+    // look : 'classic' (default) | 'neo' | 'handDrawn'
+    function _mmdInit(theme, look) {
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: 'strict',
+        theme: theme || 'default',
+        look: look || 'classic',
+        flowchart: { useMaxWidth: true },
+        sequence: { useMaxWidth: true },
+        architecture: { randomize: false }
+      });
+    }
+
     // Async load mermaid.min.js — does not block NavigationCompleted
     (function(){
       var s = document.createElement('script');
       s.src = ')P1b" + mermaidSrc + LR"P2(';
       s.onload = function() {
-        mermaid.initialize({ startOnLoad:false, theme:'default', securityLevel:'strict', flowchart:{useMaxWidth:true}, sequence:{useMaxWidth:true} });
+        _mmdInit('default');
         mermaidReady = true;
         if (_pendingRender) { _processPendingMermaid(); }
       };
@@ -218,7 +240,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     async function _processPendingMermaid() {
       if (!_pendingRender) return;
       var isDark = (_pendingRender.theme === 'dark');
-      mermaid.initialize({ startOnLoad:false, theme: isDark?'dark':'default', securityLevel:'strict', flowchart:{useMaxWidth:true}, sequence:{useMaxWidth:true} });
+      _mmdInit(isDark ? 'dark' : 'default');
       _pendingRender = null;
       var container = document.getElementById('content');
       var placeholders = container.querySelectorAll('.mermaid-container[data-mermaid-src]');
@@ -244,7 +266,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       var isDark = (theme === 'dark');
       document.body.className = isDark ? 'dark' : 'light';
       if (mermaidReady) {
-        mermaid.initialize({ startOnLoad:false, theme: isDark?'dark':'default', securityLevel:'strict', flowchart:{useMaxWidth:true}, sequence:{useMaxWidth:true} });
+        _mmdInit(isDark ? 'dark' : 'default');
       }
       var container = document.getElementById('content');
       container.innerHTML = htmlContent;
@@ -399,7 +421,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     function switchTheme(dark) {
       document.body.className = dark ? 'dark' : 'light';
       if (mermaidReady) {
-        mermaid.initialize({startOnLoad:false, theme:dark?'dark':'default', securityLevel:'strict', flowchart:{useMaxWidth:true}, sequence:{useMaxWidth:true}});
+        _mmdInit(dark ? 'dark' : 'default');
         document.querySelectorAll('.mermaid-container[data-mermaid-src]').forEach(function(el,idx){
           var src = decodeURIComponent(el.getAttribute('data-mermaid-src'));
           mermaid.render('ts-'+idx+'-'+Date.now(), src).then(function(r){ el.innerHTML=r.svg; initSvgDrag(el); }).catch(function(){});
@@ -480,6 +502,7 @@ std::wstring WebView2Manager::EscapeForJS(const std::wstring& input)
     result.reserve(input.size() + input.size() / 4);
     for (wchar_t ch : input) {
         switch (ch) {
+        case L'\0': result += L"\\u0000"; break;         // Avoid silent JS string truncation
         case L'\\': result += L"\\\\"; break;
         case L'\'': result += L"\\'";  break;
         case L'"':  result += L"\\\""; break;
@@ -532,7 +555,9 @@ HRESULT WebView2Manager::Initialize(HWND hwndParent, std::function<void()> onRea
                                 return result;
 
                             m_controller = controller;
-                            controller->get_CoreWebView2(&m_webview);
+                            HRESULT hrGet = controller->get_CoreWebView2(&m_webview);
+                            if (FAILED(hrGet) || !m_webview)
+                                return FAILED(hrGet) ? hrGet : E_FAIL;
 
                             ComPtr<ICoreWebView2Settings> settings;
                             m_webview->get_Settings(&settings);
@@ -698,13 +723,38 @@ void WebView2Manager::SetEditCallback(EditCallback callback)
                 std::wstring json = jsonRaw;
                 CoTaskMemFree(jsonRaw);
 
-                if (json.find(L"\"type\"") == std::wstring::npos)
-                    return S_OK;
+                // Extract the canonical "type" field once and dispatch on
+                // exact equality. Substring search ("does the JSON contain
+                // the literal word 'theme'?") is fooled by any payload that
+                // happens to mention the keyword, e.g. an `edit` message
+                // whose newText contains the word "theme".
+                std::wstring msgType;
+                {
+                    size_t kp = json.find(L"\"type\"");
+                    if (kp == std::wstring::npos) return S_OK;
+                    kp += 6;
+                    // Skip ':' and whitespace
+                    while (kp < json.size() && (json[kp] == L':' || json[kp] == L' '))
+                        kp++;
+                    if (kp >= json.size() || json[kp] != L'"') return S_OK;
+                    kp++;
+                    // Read until closing quote (no escape handling needed —
+                    // the JS senders only emit ASCII identifiers as type).
+                    size_t kpEnd = kp;
+                    while (kpEnd < json.size() && json[kpEnd] != L'"' &&
+                           kpEnd - kp < 32)
+                        kpEnd++;
+                    if (kpEnd >= json.size() || json[kpEnd] != L'"') return S_OK;
+                    msgType = json.substr(kp, kpEnd - kp);
+                }
+                if (msgType.empty()) return S_OK;
 
                 // Dispatch: theme change message
-                if (json.find(L"\"theme\"") != std::wstring::npos && m_themeCallback) {
-                    bool dark = json.find(L"\"dark\":true") != std::wstring::npos;
-                    m_themeCallback(dark);
+                if (msgType == L"theme") {
+                    if (m_themeCallback) {
+                        bool dark = json.find(L"\"dark\":true") != std::wstring::npos;
+                        m_themeCallback(dark);
+                    }
                     return S_OK;
                 }
 
@@ -731,28 +781,34 @@ void WebView2Manager::SetEditCallback(EditCallback callback)
                 };
 
                 // Dispatch: fontSize message
-                if (json.find(L"\"fontSize\"") != std::wstring::npos && m_fontSizeCallback) {
-                    int val = safeExtractLine(L"\"size\"");
-                    if (val >= 8 && val <= 32) m_fontSizeCallback(val);
+                if (msgType == L"fontSize") {
+                    if (m_fontSizeCallback) {
+                        int val = safeExtractLine(L"\"size\"");
+                        if (val >= 8 && val <= 32) m_fontSizeCallback(val);
+                    }
                     return S_OK;
                 }
 
                 // Dispatch: syncScroll message (Preview → Editor)
-                if (json.find(L"\"syncScroll\"") != std::wstring::npos && m_scrollCallback) {
-                    int val = safeExtractLine(L"\"line\"");
-                    if (val >= 0) m_scrollCallback(val);
+                if (msgType == L"syncScroll") {
+                    if (m_scrollCallback) {
+                        int val = safeExtractLine(L"\"line\"");
+                        if (val >= 0) m_scrollCallback(val);
+                    }
                     return S_OK;
                 }
 
                 // Dispatch: navigateToLine message (click mermaid → jump editor)
-                if (json.find(L"\"navigateToLine\"") != std::wstring::npos && m_navigateCallback) {
-                    int val = safeExtractLine(L"\"line\"");
-                    if (val >= 0) m_navigateCallback(val);
+                if (msgType == L"navigateToLine") {
+                    if (m_navigateCallback) {
+                        int val = safeExtractLine(L"\"line\"");
+                        if (val >= 0) m_navigateCallback(val);
+                    }
                     return S_OK;
                 }
 
                 // Dispatch: openFile message (relative path link clicked)
-                if (json.find(L"\"openFile\"") != std::wstring::npos && m_openFileCallback) {
+                if (msgType == L"openFile" && m_openFileCallback) {
                     // Extract "path" string value
                     std::wstring filePath;
                     size_t pathPos = json.find(L"\"path\"");
@@ -782,7 +838,7 @@ void WebView2Manager::SetEditCallback(EditCallback callback)
                 }
 
                 // Dispatch: edit message
-                if (json.find(L"\"edit\"") == std::wstring::npos || !m_editCallback)
+                if (msgType != L"edit" || !m_editCallback)
                     return S_OK;
 
                 // Parse lineStart and lineEnd (reuse safeExtractLine)

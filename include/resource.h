@@ -31,3 +31,7 @@
 #define IDT_SYNC_RESET_E2P      1003
 #define IDT_SYNC_RESET_P2E      1004
 #define SYNC_RESET_MS           150
+
+// Background Bun render polling
+#define IDT_BUN_POLL            1005
+#define BUN_POLL_MS             40

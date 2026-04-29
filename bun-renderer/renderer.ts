@@ -181,12 +181,15 @@ function fixSvgBounds(svg: string): string {
 const mermaid = (await import('mermaid')).default;
 
 let currentTheme = 'default';
+let currentLook: 'classic' | 'neo' | 'handDrawn' = 'classic';
 mermaid.initialize({
     startOnLoad: false,
     securityLevel: 'strict',
     theme: currentTheme,
+    look: currentLook,
     flowchart: { useMaxWidth: true },
     sequence: { useMaxWidth: true },
+    architecture: { randomize: false },
 });
 
 // ── Signal readiness ────────────────────────────────────────────────
@@ -220,14 +223,22 @@ for await (const chunk of Bun.stdin.stream()) {
                 const theme = (typeof req.theme === 'string' && VALID_THEMES.includes(req.theme))
                     ? req.theme : 'default';
 
-                if (theme !== currentTheme) {
+                // Validate look (mermaid 11.14+: 'classic' | 'neo' | 'handDrawn')
+                const VALID_LOOKS = ['classic', 'neo', 'handDrawn'] as const;
+                const look = (typeof req.look === 'string' && (VALID_LOOKS as readonly string[]).includes(req.look))
+                    ? (req.look as typeof currentLook) : currentLook;
+
+                if (theme !== currentTheme || look !== currentLook) {
                     currentTheme = theme;
+                    currentLook = look;
                     mermaid.initialize({
                         startOnLoad: false,
                         securityLevel: 'strict',
                         theme: currentTheme,
+                        look: currentLook,
                         flowchart: { useMaxWidth: true },
                         sequence: { useMaxWidth: true },
+                        architecture: { randomize: false },
                     });
                 }
 

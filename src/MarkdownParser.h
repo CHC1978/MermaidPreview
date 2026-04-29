@@ -26,8 +26,10 @@ public:
     static std::wstring HtmlEscape(const std::wstring& text);
 
 private:
-    // Inline formatting: bold, italic, code, links, images, strikethrough
-    static std::wstring ProcessInline(const std::wstring& text);
+    // Inline formatting: bold, italic, code, links, images, strikethrough.
+    // `depth` guards against pathologically nested markdown (e.g.
+    // `**[***x***](u)**`) overflowing the call stack.
+    static std::wstring ProcessInline(const std::wstring& text, int depth = 0);
 
     // URL-encode for data attributes
     static std::wstring UrlEncode(const std::wstring& text);

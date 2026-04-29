@@ -8,9 +8,9 @@
 #include <vector>
 #include <future>
 #include "resource.h"
+#include "BunRenderer.h"   // for MermaidRenderResult (used in std::future member)
 
 class WebView2Manager;
-class BunRenderer;
 
 class CMermaidFrame : public CETLFrame<CMermaidFrame> {
 public:
@@ -38,6 +38,11 @@ public:
         _ALLOW_MULTIPLE_INSTANCES   = FALSE,
     };
 
+    // CETLFrame instantiates/destroys this on plugin (un)load. Provide an
+    // explicit destructor so we can detach any in-flight Bun render future
+    // before its blocking destructor runs (audit v3 NEW-003).
+    ~CMermaidFrame();
+
     // --- EmEditor callbacks ---
     void OnCommand(HWND hwndView);
     void OnEvents(HWND hwndView, UINT nEvent, LPARAM lParam);
@@ -59,6 +64,9 @@ private:
 
     // --- Preview logic ---
     void UpdatePreview(HWND hwndView);
+    void OnBunRenderComplete();
+    void SpliceSvgIntoHtml(std::wstring& html,
+                           const std::vector<MermaidRenderResult>& results);
     bool IsDarkMode(HWND hwndView) const;
 
     // --- Bun renderer ---
@@ -80,7 +88,9 @@ private:
     bool IsMarkdownFile(HWND hwndView) const;
     bool HasMermaidBlocks(HWND hwndView) const;
     void TryAutoOpen(HWND hwndView);
-    void TryAutoClose(HWND hwndView);
+    // TryAutoClose was removed (audit v2 LOW-4.4): it was never called and
+    // its intended behaviour — yanking the panel when a user transiently
+    // deletes mermaid blocks during editing — is poor UX.
 
     // --- Registry ---
     void LoadSettings();
@@ -107,6 +117,13 @@ private:
     bool                            m_bSyncFromPreview = false;  // Anti-feedback: Preview→Editor
     bool                            m_bBunAvailable = false;
     std::future<bool>               m_bunStartFuture;
+
+    // --- Async Bun render state (UI thread only) ---
+    std::future<std::vector<MermaidRenderResult>> m_renderFuture;
+    std::wstring                    m_renderPendingHtml;
+    bool                            m_renderPendingDark = false;
+    HWND                            m_renderPendingView = nullptr;
+    bool                            m_renderDirty = false;   // re-trigger after current job
 
     // Optimization 3: Pre-fetched HTML (prepared while WebView2 initializes)
     std::wstring                    m_sPrefetchedHtml;
