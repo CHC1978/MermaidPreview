@@ -84,6 +84,14 @@ private:
                                     const std::wstring& nodeId,
                                     const std::wstring& newLabel);
 
+    // --- Phase 1: auto-correction whole-block replacement ---
+    // newSource is the new mermaid block body (no fence lines); already
+    // validated by the JS side. We splice it between the original fence
+    // lines via the existing OnPreviewTextEdited line-range path.
+    void OnPreviewMermaidBlockEdited(HWND hwndView,
+                                     const std::wstring& blockId,
+                                     const std::wstring& newSource);
+
     // --- Scroll sync ---
     void SyncScrollToPreview(HWND hwndView);
     void OnPreviewScrolled(HWND hwndView, int line);

@@ -196,6 +196,10 @@ std::wstring WebView2Manager::BuildHtmlPage() const
   .ctx-item.ctx-active::before { content:'> '; font-weight:400; }
   .ctx-sep { margin:4px 12px; border:0; border-top:1px solid #d0d7de; }
   body.dark .ctx-sep { border-color:#444; }
+)P1";
+    // Continue Part 1 in a fresh raw string to stay under MSVC's 16380-char
+    // string-literal limit (Phase 1 added another ~1 KB of CSS).
+    html += LR"P1z(
   .svg-zoom-badge { position:absolute; top:4px; right:4px; background:rgba(0,0,0,0.5); color:#fff; font-size:11px; padding:1px 6px; border-radius:3px; pointer-events:none; opacity:0; transition:opacity 0.2s; }
   .mermaid-container:hover .svg-zoom-badge { opacity:1; }
   /* Expand-to-pane button (sits next to .svg-zoom-badge) */
@@ -204,6 +208,12 @@ std::wstring WebView2Manager::BuildHtmlPage() const
   .mermaid-container.mp-expanded .mermaid-expand-btn { opacity:1; }
   .mermaid-expand-btn:hover { background:rgba(9,105,218,0.85); }
   body.dark .mermaid-expand-btn:hover { background:rgba(88,166,255,0.85); }
+  /* Auto-fix button (Phase 1). Always visible when overlaps detected. */
+  .mermaid-autofix-btn { position:absolute; top:4px; left:6px; background:rgba(220,150,0,0.92); color:#fff; font-size:12px; line-height:1; padding:4px 9px; border:0; border-radius:3px; cursor:pointer; font-family:inherit; box-shadow:0 1px 4px rgba(0,0,0,0.25); display:none; z-index:5; }
+  .mermaid-container.mp-has-overlap .mermaid-autofix-btn { display:inline-block; }
+  .mermaid-autofix-btn:hover { background:rgba(255,170,0,1); }
+  .mermaid-autofix-toast { position:absolute; top:36px; left:6px; max-width:340px; background:rgba(0,0,0,0.85); color:#fff; font-size:12px; padding:6px 10px; border-radius:4px; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:6; }
+  .mermaid-container.mp-show-toast .mermaid-autofix-toast { opacity:1; }
   /* Fullscreen takeover: one container fills the entire preview pane,
      scroll bars handle anything bigger. body.mp-fs hides the rest. */
   body.mp-fs > #content > :not(.mermaid-container.mp-expanded) { display:none; }
@@ -218,7 +228,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
   body.dark [data-line-start]:hover { outline-color:#555; }
   .editing { outline:2px solid #0969da !important; background:rgba(9,105,218,0.05); padding:2px 4px; }
   body.dark .editing { outline-color:#58a6ff !important; background:rgba(88,166,255,0.05); }
-)P1";
+)P1z";
 
     // --- Part 1a: HTML body ---
     html += LR"P1a(
@@ -269,17 +279,18 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       });
     }
 
-    // Lift <g.edgeLabels> after <g.nodes> so labels paint on top — mermaid's
-    // default DOM order paints nodes over labels, which is what produced the
-    // overlap the user reported in the RE flowchart.
+    // Lift every <g.edgeLabels> to be the LAST sibling under its parent.
+    // Mermaid's default DOM order paints nodes/clusters over labels, so we
+    // walk *all* edgeLabels groups (including those nested inside
+    // <g.cluster>, which is what made labels disappear behind subgraph
+    // boundaries in the user's RE flowchart). Re-appending each one to
+    // its existing parent puts it at the end → drawn last → on top.
     function _liftEdgeLabels(root) {
       if (!root) return;
-      var svgs = root.querySelectorAll ? root.querySelectorAll('svg') : [];
-      for (var k = 0; k < svgs.length; k++) {
-        var rootG = svgs[k].querySelector(':scope > g');
-        if (!rootG) continue;
-        var labelsG = rootG.querySelector(':scope > g.edgeLabels');
-        if (labelsG) rootG.appendChild(labelsG); // last child = drawn last = top-most
+      var labels = root.querySelectorAll ? root.querySelectorAll('g.edgeLabels') : [];
+      for (var i = 0; i < labels.length; i++) {
+        var p = labels[i].parentNode;
+        if (p) p.appendChild(labels[i]);
       }
     }
 
@@ -322,11 +333,172 @@ std::wstring WebView2Manager::BuildHtmlPage() const
         document.body.classList.remove('mp-fs');
       }
     });
+)P1b";
 
+    // Continue Part 1b in a fresh raw string — Phase 1's overlap detector
+    // pushed this block past MSVC's 16380-char literal limit.
+    html += LR"P1c(
+    // ===== Phase 1 Auto-correction: overlap detection + spacing fix =====
+    // Walk the rendered SVG inside one container, return the list of edge
+    // labels whose AABB intersects any node AABB. We use viewport-relative
+    // getBoundingClientRect so transforms / nested clusters compose
+    // correctly without manual coordinate math.
+    function _detectOverlaps(container) {
+      var svg = container && container.querySelector ? container.querySelector('svg') : null;
+      if (!svg) return [];
+      var nodes = svg.querySelectorAll('g.node');
+      var labels = svg.querySelectorAll('g.edgeLabels g.label');
+      if (!nodes.length || !labels.length) return [];
+      var nodeBoxes = [];
+      for (var i = 0; i < nodes.length; i++) {
+        var nb = nodes[i].getBoundingClientRect();
+        if (nb.width > 0 && nb.height > 0) nodeBoxes.push(nb);
+      }
+      var hits = [];
+      for (var j = 0; j < labels.length; j++) {
+        var L = labels[j];
+        var txt = (L.textContent || '').trim();
+        if (!txt) continue;
+        var lb = L.getBoundingClientRect();
+        if (lb.width <= 0 || lb.height <= 0) continue;
+        for (var k = 0; k < nodeBoxes.length; k++) {
+          var nb2 = nodeBoxes[k];
+          var ovX = Math.max(0, Math.min(nb2.right, lb.right) - Math.max(nb2.left, lb.left));
+          var ovY = Math.max(0, Math.min(nb2.bottom, lb.bottom) - Math.max(nb2.top, lb.top));
+          // > 9 px² to ignore single-pixel touch when CSS rounding bites.
+          if (ovX * ovY > 9) {
+            hits.push({ label: L, text: txt });
+            break; // one hit per label is enough for the user-facing count
+          }
+        }
+      }
+      return hits;
+    }
+
+    // Inject (or remove) the ⚠ Auto-fix button on a container based on
+    // whether overlaps are present. Idempotent — safe to call after every
+    // render or theme switch.
+    function _refreshAutoFixBtn(container) {
+      var hits = _detectOverlaps(container);
+      var btn = container.querySelector(':scope > .mermaid-autofix-btn');
+      var toast = container.querySelector(':scope > .mermaid-autofix-toast');
+      if (hits.length === 0) {
+        container.classList.remove('mp-has-overlap');
+        return;
+      }
+      container.classList.add('mp-has-overlap');
+      if (!btn) {
+        btn = document.createElement('button');
+        btn.className = 'mermaid-autofix-btn';
+        btn.type = 'button';
+        btn.addEventListener('mousedown', function(e){ e.stopPropagation(); });
+        btn.addEventListener('click', function(e){
+          e.stopPropagation(); e.preventDefault();
+          _applyAutoFix(container);
+        });
+        container.appendChild(btn);
+      }
+      btn.textContent = '⚠ ' + hits.length + ' overlap' + (hits.length > 1 ? 's' : '') + ' — Auto-fix';
+      btn.title = hits.slice(0, 5).map(function(h){
+        return '• ' + (h.text.length > 40 ? h.text.substring(0, 37) + '…' : h.text);
+      }).join('\n') + (hits.length > 5 ? '\n…and ' + (hits.length - 5) + ' more' : '');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.className = 'mermaid-autofix-toast';
+        container.appendChild(toast);
+      }
+    }
+
+    // Show a transient message inside the container (next to the button).
+    function _showToast(container, msg, isErr) {
+      var t = container.querySelector(':scope > .mermaid-autofix-toast');
+      if (!t) return;
+      t.textContent = msg;
+      t.style.background = isErr ? 'rgba(180,40,40,0.92)' : 'rgba(0,0,0,0.85)';
+      container.classList.add('mp-show-toast');
+      clearTimeout(t._tid);
+      t._tid = setTimeout(function(){ container.classList.remove('mp-show-toast'); }, 2400);
+    }
+
+    // Take the block's source (from data-mermaid-src), prepend / merge a
+    // %%{init: {flowchart:{nodeSpacing,rankSpacing}}}%% directive that
+    // gives mermaid more layout breathing room, validate via mermaid.parse,
+    // and post the result back to C++. The user can undo via Ctrl+Z in
+    // EmEditor; we never silently mutate.
+    async function _applyAutoFix(container) {
+      var blockId = container.getAttribute('data-mermaid-id');
+      var rawSrc = container.getAttribute('data-mermaid-src');
+      if (!blockId || !rawSrc) { _showToast(container, 'No source available', true); return; }
+      var src;
+      try { src = decodeURIComponent(rawSrc); }
+      catch(_) { _showToast(container, 'Cannot decode source', true); return; }
+
+      var newSrc = _injectSpacingDirective(src);
+      if (newSrc === src) {
+        _showToast(container, 'Already at maximum spacing — try shorter labels', true);
+        return;
+      }
+
+      // Validate before sending. mermaid.parse rejects on syntax error.
+      try {
+        if (mermaid && mermaid.parse) { await mermaid.parse(newSrc); }
+      } catch (e) {
+        _showToast(container, 'Auto-fix produced invalid syntax — aborted', true);
+        return;
+      }
+
+      if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage({
+          type: 'editMermaidBlock',
+          blockId: blockId,
+          newSource: newSrc
+        });
+        _showToast(container, 'Spacing increased — markdown updated', false);
+      }
+    }
+
+    // Compute new mermaid block source with bumped flowchart spacing.
+    // Strategy:
+    //   1. If an `%%{init: ... 'flowchart': {... rankSpacing: N ...} ...}%%`
+    //      directive exists, increment N by 30 (cap 300) and the same for
+    //      nodeSpacing.
+    //   2. Otherwise prepend a fresh directive on its own line right after
+    //      the flowchart/graph declaration. Mermaid 11 merges this with
+    //      `_mmdInit`'s globals at render time.
+    function _injectSpacingDirective(src) {
+      var rxRank = /(rankSpacing\s*:\s*)(\d+)/;
+      var rxNode = /(nodeSpacing\s*:\s*)(\d+)/;
+      var hasDirective = /%%\{[^%]*init[^%]*\}%%/.test(src);
+      if (hasDirective && (rxRank.test(src) || rxNode.test(src))) {
+        var bumped = src
+          .replace(rxRank, function(_, p, n){ return p + Math.min(300, parseInt(n) + 30); })
+          .replace(rxNode, function(_, p, n){ return p + Math.min(220, parseInt(n) + 20); });
+        return bumped;
+      }
+      // Find the first non-empty / non-comment line — the flowchart
+      // declaration. Insert directive after it.
+      var lines = src.split(/\r?\n/);
+      var insertAt = 0;
+      for (var i = 0; i < lines.length; i++) {
+        var t = lines[i].trim();
+        if (!t) continue;
+        if (t.indexOf('%%') === 0) continue;
+        insertAt = i + 1;
+        break;
+      }
+      var directive = "%%{init: {'flowchart': {'rankSpacing': 110, 'nodeSpacing': 80, 'curve': 'basis'}}}%%";
+      lines.splice(insertAt, 0, directive);
+      return lines.join('\n');
+    }
+)P1c";
+
+    // Continue Part 1b in a fresh raw string — Phase 1 pushed the JS block
+    // past MSVC's 16380-char string-literal limit.
+    html += LR"P1y(
     // Async load mermaid.min.js — does not block NavigationCompleted
     (function(){
       var s = document.createElement('script');
-      s.src = ')P1b" + mermaidSrc + LR"P2(';
+      s.src = ')P1y" + mermaidSrc + LR"P2(';
       s.onload = function() {
         _mmdInit('default');
         mermaidReady = true;
@@ -359,6 +531,9 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       renderedMermaidSrcs = newSrcs;
       container.querySelectorAll('.mermaid-container').forEach(function(c){ initSvgDrag(c); _addExpandBtn(c); });
       _liftEdgeLabels(container);
+      // Run overlap detection AFTER lift — lifted painter order can resolve
+      // borderline overlaps without auto-fix.
+      container.querySelectorAll('.mermaid-container').forEach(_refreshAutoFixBtn);
     }
 
     window.renderContent = async function(htmlContent, theme) {
@@ -394,6 +569,9 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       }
       container.querySelectorAll('.mermaid-container').forEach(function(c){ initSvgDrag(c); _addExpandBtn(c); });
       _liftEdgeLabels(container);
+      // Run overlap detection AFTER lift — lifted painter order can resolve
+      // borderline overlaps without auto-fix.
+      container.querySelectorAll('.mermaid-container').forEach(_refreshAutoFixBtn);
     };
     window.setTheme = function(dark) { document.body.className = dark ? 'dark' : 'light'; };
     window.clearContent = function() { document.getElementById('content').innerHTML = '<div class="empty">Open a Markdown file to preview</div>'; renderedMermaidSrcs = {}; _pendingRender = null; };
@@ -626,7 +804,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
         _mmdInit(dark ? 'dark' : 'default');
         document.querySelectorAll('.mermaid-container[data-mermaid-src]').forEach(function(el,idx){
           var src = decodeURIComponent(el.getAttribute('data-mermaid-src'));
-          mermaid.render('ts-'+idx+'-'+Date.now(), src).then(function(r){ el.innerHTML=r.svg; initSvgDrag(el); _addExpandBtn(el); _liftEdgeLabels(el); }).catch(function(){});
+          mermaid.render('ts-'+idx+'-'+Date.now(), src).then(function(r){ el.innerHTML=r.svg; initSvgDrag(el); _addExpandBtn(el); _liftEdgeLabels(el); _refreshAutoFixBtn(el); }).catch(function(){});
         });
       }
       window.chrome.webview.postMessage({type:'theme',dark:dark});
@@ -1039,6 +1217,51 @@ void WebView2Manager::SetEditCallback(EditCallback callback)
                     return S_OK;
                 }
 
+                // Dispatch: editMermaidBlock (Phase 1 auto-correction). JS
+                // validated newSource with mermaid.parse() before sending.
+                if (msgType == L"editMermaidBlock" && m_editMermaidBlockCallback) {
+                    auto extractStrField = [&](const std::wstring& key) -> std::wstring {
+                        std::wstring v;
+                        size_t kp = json.find(key);
+                        if (kp == std::wstring::npos) return v;
+                        kp = json.find(L'"', kp + key.size());
+                        if (kp == std::wstring::npos) return v;
+                        ++kp;
+                        while (kp < json.size() && json[kp] != L'"') {
+                            if (json[kp] == L'\\' && kp + 1 < json.size()) {
+                                switch (json[kp + 1]) {
+                                case L'n':  v += L'\n'; kp += 2; break;
+                                case L'r':  v += L'\r'; kp += 2; break;
+                                case L't':  v += L'\t'; kp += 2; break;
+                                case L'"':  v += L'"';  kp += 2; break;
+                                case L'\\': v += L'\\'; kp += 2; break;
+                                case L'/':  v += L'/';  kp += 2; break;
+                                default:    v += json[kp]; ++kp; break;
+                                }
+                            } else { v += json[kp]; ++kp; }
+                        }
+                        return v;
+                    };
+                    std::wstring blockId   = extractStrField(L"\"blockId\"");
+                    std::wstring newSource = extractStrField(L"\"newSource\"");
+
+                    bool blockOk = blockId.rfind(L"mermaid-placeholder-", 0) == 0 &&
+                                   blockId.size() > 20;
+                    if (blockOk) {
+                        for (size_t bi = 20; bi < blockId.size(); ++bi) {
+                            if (blockId[bi] < L'0' || blockId[bi] > L'9') { blockOk = false; break; }
+                        }
+                    }
+                    // Generous cap — whole mermaid block can legitimately be
+                    // a few hundred KB for huge architectural diagrams.
+                    constexpr size_t kMaxBlockBytes = 4 * 1024 * 1024;
+                    if (blockOk && !newSource.empty() &&
+                        newSource.size() <= kMaxBlockBytes) {
+                        m_editMermaidBlockCallback(blockId, newSource);
+                    }
+                    return S_OK;
+                }
+
                 // Dispatch: editMermaidNode (M2 — inline mermaid label edit).
                 // Inputs: blockId="mermaid-placeholder-N", nodeId, newLabel
                 // (newLabel arrives with `\n` representing `<br/>` in source).
@@ -1140,6 +1363,14 @@ void WebView2Manager::SetEditCallback(EditCallback callback)
 void WebView2Manager::SetEditMermaidNodeCallback(EditMermaidNodeCallback callback)
 {
     m_editMermaidNodeCallback = std::move(callback);
+}
+
+// ============================================================================
+// SetEditMermaidBlockCallback
+// ============================================================================
+void WebView2Manager::SetEditMermaidBlockCallback(EditMermaidBlockCallback callback)
+{
+    m_editMermaidBlockCallback = std::move(callback);
 }
 
 // ============================================================================

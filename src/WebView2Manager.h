@@ -55,6 +55,13 @@ public:
                                                        const std::wstring& newLabel)>;
     void SetEditMermaidNodeCallback(EditMermaidNodeCallback callback);
 
+    // Whole-block replacement (used by Phase 1 auto-correction). The JS side
+    // is responsible for syntax-validating newSource via `mermaid.parse()`
+    // before calling this; C++ does the line-range writeback only.
+    using EditMermaidBlockCallback = std::function<void(const std::wstring& blockId,
+                                                        const std::wstring& newSource)>;
+    void SetEditMermaidBlockCallback(EditMermaidBlockCallback callback);
+
     // Set callback for theme change from context menu
     using ThemeCallback = std::function<void(bool dark)>;
     void SetThemeCallback(ThemeCallback callback);
@@ -121,6 +128,7 @@ private:
     // Callbacks from preview panel
     EditCallback m_editCallback;
     EditMermaidNodeCallback m_editMermaidNodeCallback;
+    EditMermaidBlockCallback m_editMermaidBlockCallback;
     ThemeCallback m_themeCallback;
     ScrollCallback m_scrollCallback;
     NavigateCallback m_navigateCallback;

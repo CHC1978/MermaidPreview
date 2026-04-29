@@ -418,6 +418,13 @@ void CMermaidFrame::OpenCustomBar(HWND hwndView, std::wstring prefetchedContent)
                         OnPreviewMermaidNodeEdited(m_hWndLastView, blockId, nodeId, newLabel);
                 });
 
+            // Phase 1: register whole-block replacement (auto-correction).
+            m_pWebView->SetEditMermaidBlockCallback(
+                [this](const std::wstring& blockId, const std::wstring& newSource) {
+                    if (m_hWndLastView && IsWindow(m_hWndLastView))
+                        OnPreviewMermaidBlockEdited(m_hWndLastView, blockId, newSource);
+                });
+
             // Register theme change callback (from right-click context menu)
             m_pWebView->SetThemeCallback([this](bool dark) {
                 m_bDarkMode = dark;
@@ -1222,6 +1229,75 @@ void CMermaidFrame::OnPreviewMermaidNodeEdited(HWND hwndView,
     // Reuse the existing line-range writeback so EmEditor undo, scroll
     // sync flags and m_*Last* invalidation all behave identically to the
     // plain-text edit path.
+    OnPreviewTextEdited(hwndView, blk.startLine, blk.endLine, newBlock);
+}
+
+// ============================================================================
+// OnPreviewMermaidBlockEdited (Phase 1 auto-correction)
+//
+// Whole-block replacement: JS computed and validated newSource, we just
+// preserve the original ```mermaid / ``` fence lines and feed the full
+// rebuilt block through OnPreviewTextEdited.
+// ============================================================================
+void CMermaidFrame::OnPreviewMermaidBlockEdited(HWND hwndView,
+                                                const std::wstring& blockId,
+                                                const std::wstring& newSource)
+{
+    if (!hwndView || !IsWindow(hwndView)) return;
+    if (blockId.size() <= 20) return;
+
+    int blockIdx = 0;
+    for (size_t i = 20; i < blockId.size(); ++i) {
+        wchar_t c = blockId[i];
+        if (c < L'0' || c > L'9') return;
+        blockIdx = blockIdx * 10 + (c - L'0');
+        if (blockIdx > 100000) return;
+    }
+
+    std::wstring content = MarkdownParser::GetDocumentContent(hwndView);
+    auto blocks = MarkdownParser::ExtractMermaidBlocks(content);
+    if (blockIdx < 0 || blockIdx >= (int)blocks.size()) return;
+    const MermaidBlock& blk = blocks[blockIdx];
+
+    // Read the actual fence lines so we keep any leading whitespace / lang
+    // tag the user wrote (e.g. `\t```mermaid` inside a list).
+    auto getLine = [&](int y) -> std::wstring {
+        GET_LINE_INFO gli = {};
+        gli.cch = 0;
+        gli.flags = 0;
+        gli.yLine = (UINT_PTR)y;
+        UINT_PTR cch = (UINT_PTR)SendMessage(
+            hwndView, EE_GET_LINEW, (WPARAM)&gli, (LPARAM)nullptr);
+        std::wstring buf;
+        if (cch == 0) return buf;
+        buf.assign(cch, L'\0');
+        gli.cch = cch;
+        SendMessage(hwndView, EE_GET_LINEW, (WPARAM)&gli, (LPARAM)buf.data());
+        while (!buf.empty() && buf.back() == L'\0') buf.pop_back();
+        return buf;
+    };
+    UINT_PTR totalLines = (UINT_PTR)SendMessage(
+        hwndView, EE_GET_LINES, (WPARAM)0, 0);
+    if (blk.startLine < 0 || blk.startLine >= (int)totalLines) return;
+    std::wstring openFence  = getLine(blk.startLine);
+    std::wstring closeFence = (blk.endLine >= 0 && blk.endLine < (int)totalLines)
+                                ? getLine(blk.endLine)
+                                : L"```";
+
+    // Normalise the body — strip an optional trailing newline so we don't
+    // double up on the join below; we add exactly one between each line.
+    std::wstring body = newSource;
+    if (!body.empty() && body.back() == L'\n') body.pop_back();
+    if (!body.empty() && body.back() == L'\r') body.pop_back();
+
+    std::wstring newBlock;
+    newBlock.reserve(openFence.size() + body.size() + closeFence.size() + 4);
+    newBlock += openFence;
+    newBlock += L'\n';
+    newBlock += body;
+    newBlock += L'\n';
+    newBlock += closeFence;
+
     OnPreviewTextEdited(hwndView, blk.startLine, blk.endLine, newBlock);
 }
 
