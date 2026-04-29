@@ -405,11 +405,82 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     });
 
     // ===== Editing =====
+    // Double-click → contentEditable. Two paths:
+    //   (a) markdown elements with data-line-start → POST `edit` with the
+    //       full line range so OnPreviewTextEdited can replace it.
+    //   (b) mermaid SVG node labels (M2) → POST `editMermaidNode` with
+    //       blockId+nodeId+newLabel; C++ resolves which line in the block
+    //       carries the matching label and rewrites just that range.
     document.getElementById('content').addEventListener('dblclick', function(e) {
+      // --- (b) Mermaid node label path ---
+      var mc = e.target.closest && e.target.closest('.mermaid-container');
+      if (mc) {
+        var nodeG = e.target.closest('g.node');
+        if (!nodeG) return;
+        var blockId = mc.getAttribute('data-mermaid-id');
+        // Mermaid 11.14 emits id="<svgId>-flowchart-<nodeId>-<n>". Strip
+        // the "<svgId>-flowchart-" prefix and trailing "-<n>" to recover
+        // the original mermaid identifier.
+        var rawId = nodeG.getAttribute('id') || '';
+        var m = rawId.match(/-flowchart-(.+)-\d+$/);
+        if (!m || !blockId) return;
+        var nodeId = m[1];
+        // Find the human-editable target inside the foreignObject.
+        var p = nodeG.querySelector('foreignObject p, foreignObject span.nodeLabel, foreignObject div');
+        if (!p || p.classList.contains('editing')) return;
+        // Convert any rendered <br> back to a real newline so the user
+        // sees one line per source line and can edit naturally.
+        if (p.querySelector && p.querySelector('br')) {
+          p.innerHTML = p.innerHTML.replace(/<br\s*\/?>/gi, '\n');
+        }
+        p.contentEditable = 'true';
+        p.classList.add('editing');
+        p.style.whiteSpace = 'pre-wrap';
+        p._origText = p.textContent;
+        // Stop the click bubbling up to the navigateToLine handler that
+        // also lives on .mermaid-container.
+        e.stopPropagation();
+        e.preventDefault();
+        // Defer focus + select-all so the browser doesn't immediately
+        // clear the selection from the dblclick.
+        setTimeout(function(){
+          p.focus();
+          try { var rng = document.createRange(); rng.selectNodeContents(p);
+                var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rng); } catch(_){}
+        }, 0);
+        function mmdSave() {
+          var txt = (p.textContent || '');
+          if (txt !== p._origText) {
+            window.chrome.webview.postMessage({
+              type:'editMermaidNode',
+              blockId: blockId,
+              nodeId: nodeId,
+              newLabel: txt
+            });
+          }
+          mmdFinish();
+        }
+        function mmdFinish() {
+          p.contentEditable = 'false';
+          p.classList.remove('editing');
+          p.style.whiteSpace = '';
+          p.removeEventListener('blur', mmdBlur);
+          p.removeEventListener('keydown', mmdKey);
+        }
+        function mmdBlur() { mmdSave(); }
+        function mmdKey(ev) {
+          if (ev.key === 'Escape') { p.textContent = p._origText; mmdFinish(); }
+          else if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); mmdSave(); }
+        }
+        p.addEventListener('blur', mmdBlur);
+        p.addEventListener('keydown', mmdKey);
+        return;
+      }
+
+      // --- (a) Plain markdown path (existing behaviour) ---
       var el = e.target;
       while (el && el !== this) { if (el.hasAttribute('data-line-start')) break; el = el.parentElement; }
       if (!el || !el.hasAttribute('data-line-start')) return;
-      if (el.closest('.mermaid-container')) return;
       if (el.classList.contains('editing')) return;
       el.contentEditable = 'true'; el.classList.add('editing'); el.focus();
       el._origText = el.textContent;
@@ -916,6 +987,59 @@ void WebView2Manager::SetEditCallback(EditCallback callback)
                     return S_OK;
                 }
 
+                // Dispatch: editMermaidNode (M2 — inline mermaid label edit).
+                // Inputs: blockId="mermaid-placeholder-N", nodeId, newLabel
+                // (newLabel arrives with `\n` representing `<br/>` in source).
+                if (msgType == L"editMermaidNode" && m_editMermaidNodeCallback) {
+                    auto extractStr = [&](const std::wstring& key) -> std::wstring {
+                        std::wstring v;
+                        size_t kp = json.find(key);
+                        if (kp == std::wstring::npos) return v;
+                        kp = json.find(L'"', kp + key.size());
+                        if (kp == std::wstring::npos) return v;
+                        ++kp;
+                        while (kp < json.size() && json[kp] != L'"') {
+                            if (json[kp] == L'\\' && kp + 1 < json.size()) {
+                                switch (json[kp + 1]) {
+                                case L'n':  v += L'\n'; kp += 2; break;
+                                case L'r':  v += L'\r'; kp += 2; break;
+                                case L't':  v += L'\t'; kp += 2; break;
+                                case L'"':  v += L'"';  kp += 2; break;
+                                case L'\\': v += L'\\'; kp += 2; break;
+                                case L'/':  v += L'/';  kp += 2; break;
+                                default:    v += json[kp]; ++kp; break;
+                                }
+                            } else { v += json[kp]; ++kp; }
+                        }
+                        return v;
+                    };
+                    std::wstring blockId  = extractStr(L"\"blockId\"");
+                    std::wstring nodeId   = extractStr(L"\"nodeId\"");
+                    std::wstring newLabel = extractStr(L"\"newLabel\"");
+
+                    // Validate blockId == "mermaid-placeholder-<digits>".
+                    bool blockOk = blockId.rfind(L"mermaid-placeholder-", 0) == 0;
+                    if (blockOk) {
+                        for (size_t bi = 20; bi < blockId.size(); ++bi) {
+                            if (blockId[bi] < L'0' || blockId[bi] > L'9') { blockOk = false; break; }
+                        }
+                        if (blockId.size() <= 20) blockOk = false;
+                    }
+                    // Validate nodeId — mermaid identifier grammar.
+                    bool nodeOk = !nodeId.empty();
+                    for (wchar_t c : nodeId) {
+                        if (!((c >= L'A' && c <= L'Z') || (c >= L'a' && c <= L'z') ||
+                              (c >= L'0' && c <= L'9') || c == L'_' || c == L'-')) {
+                            nodeOk = false; break;
+                        }
+                    }
+                    // Reuse the existing 1 MB cap from the plain-text edit path.
+                    if (blockOk && nodeOk && newLabel.size() <= 1024 * 1024) {
+                        m_editMermaidNodeCallback(blockId, nodeId, newLabel);
+                    }
+                    return S_OK;
+                }
+
                 // Dispatch: edit message
                 if (msgType != L"edit" || !m_editCallback)
                     return S_OK;
@@ -956,6 +1080,14 @@ void WebView2Manager::SetEditCallback(EditCallback callback)
                 return S_OK;
             }).Get(),
         &m_webMessageToken);
+}
+
+// ============================================================================
+// SetEditMermaidNodeCallback
+// ============================================================================
+void WebView2Manager::SetEditMermaidNodeCallback(EditMermaidNodeCallback callback)
+{
+    m_editMermaidNodeCallback = std::move(callback);
 }
 
 // ============================================================================

@@ -48,6 +48,13 @@ public:
     using EditCallback = std::function<void(int lineStart, int lineEnd, const std::wstring& newText)>;
     void SetEditCallback(EditCallback callback);
 
+    // Set callback for in-place mermaid node label editing from the preview.
+    // `\n` in newLabel represents a `<br/>` line break in the source.
+    using EditMermaidNodeCallback = std::function<void(const std::wstring& blockId,
+                                                       const std::wstring& nodeId,
+                                                       const std::wstring& newLabel)>;
+    void SetEditMermaidNodeCallback(EditMermaidNodeCallback callback);
+
     // Set callback for theme change from context menu
     using ThemeCallback = std::function<void(bool dark)>;
     void SetThemeCallback(ThemeCallback callback);
@@ -113,6 +120,7 @@ private:
 
     // Callbacks from preview panel
     EditCallback m_editCallback;
+    EditMermaidNodeCallback m_editMermaidNodeCallback;
     ThemeCallback m_themeCallback;
     ScrollCallback m_scrollCallback;
     NavigateCallback m_navigateCallback;

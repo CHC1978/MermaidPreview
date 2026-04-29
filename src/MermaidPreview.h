@@ -76,6 +76,14 @@ private:
     void OnPreviewTextEdited(HWND hwndView, int lineStart, int lineEnd,
                              const std::wstring& newText);
 
+    // --- M2: in-place mermaid node label edit ---
+    // newLabel uses '\n' as the visible line break; converted to <br/>
+    // when written back to the source.
+    void OnPreviewMermaidNodeEdited(HWND hwndView,
+                                    const std::wstring& blockId,
+                                    const std::wstring& nodeId,
+                                    const std::wstring& newLabel);
+
     // --- Scroll sync ---
     void SyncScrollToPreview(HWND hwndView);
     void OnPreviewScrolled(HWND hwndView, int line);

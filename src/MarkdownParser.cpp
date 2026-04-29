@@ -70,6 +70,180 @@ std::vector<MermaidBlock> MarkdownParser::ExtractMermaidBlocks(const std::wstrin
 }
 
 // ============================================================================
+// ExtractFlowchartNodes - index every `id[label]` / `id{label}` / `id(label)`
+// definition in a flowchart mermaid block. Quote-aware so `A["a > b"]` is
+// handled correctly, and tolerant of `<br/>` inside labels.
+//
+// Notes:
+//   - Bails out early (returns empty) if the first non-comment line is not
+//     a flowchart declaration (`flowchart ...` / `graph ...`).
+//   - Only the first occurrence of each nodeId counts as a definition;
+//     subsequent edges that reuse the id without re-declaring its label
+//     (e.g. `A --> B` after `A[Label]`) are skipped.
+//   - Identifier syntax is what mermaid actually accepts: `[A-Za-z_][\w-]*`.
+//     Anything outside that grammar is ignored to avoid false positives.
+// ============================================================================
+std::vector<MermaidNodeRef>
+MarkdownParser::ExtractFlowchartNodes(const std::wstring& blockSource)
+{
+    std::vector<MermaidNodeRef> out;
+    if (blockSource.empty()) return out;
+
+    // Split into lines, preserving offsets for in-line label slicing.
+    std::vector<std::wstring> lines;
+    {
+        size_t pos = 0;
+        while (pos <= blockSource.size()) {
+            size_t eol = blockSource.find(L'\n', pos);
+            if (eol == std::wstring::npos) eol = blockSource.size();
+            std::wstring l = blockSource.substr(pos, eol - pos);
+            if (!l.empty() && l.back() == L'\r') l.pop_back();
+            lines.push_back(std::move(l));
+            if (eol >= blockSource.size()) break;
+            pos = eol + 1;
+        }
+    }
+
+    auto isIdStart = [](wchar_t c) {
+        return (c >= L'A' && c <= L'Z') || (c >= L'a' && c <= L'z') || c == L'_';
+    };
+    auto isIdCont = [](wchar_t c) {
+        return (c >= L'A' && c <= L'Z') || (c >= L'a' && c <= L'z') ||
+               (c >= L'0' && c <= L'9') || c == L'_' || c == L'-';
+    };
+
+    // First non-blank, non-comment line must declare flowchart/graph.
+    bool isFlowchart = false;
+    for (const auto& l : lines) {
+        size_t i = 0;
+        while (i < l.size() && (l[i] == L' ' || l[i] == L'\t')) i++;
+        if (i >= l.size()) continue;
+        if (l[i] == L'%' && i + 1 < l.size() && l[i + 1] == L'%') continue;
+        std::wstring lower;
+        size_t j = i;
+        while (j < l.size() && j < i + 16 && l[j] != L' ' && l[j] != L'\t')
+            lower += (wchar_t)towlower(l[j++]);
+        isFlowchart = (lower == L"flowchart" || lower == L"graph");
+        break;
+    }
+    if (!isFlowchart) return out;
+
+    // Track which ids we've already accepted so re-uses don't double-emit.
+    std::vector<std::wstring> seen;
+    auto alreadySeen = [&](const std::wstring& id) {
+        for (const auto& s : seen) if (s == id) return true;
+        return false;
+    };
+
+    for (int lineIdx = 0; lineIdx < (int)lines.size(); ++lineIdx) {
+        const std::wstring& l = lines[lineIdx];
+        size_t i = 0;
+        while (i < l.size() && (l[i] == L' ' || l[i] == L'\t')) i++;
+        if (i >= l.size()) continue;
+
+        // Skip directive (%%{...}%%) and plain comments (%% ...).
+        if (l[i] == L'%' && i + 1 < l.size() && l[i + 1] == L'%') continue;
+
+        // Skip subgraph/end keywords (their argument is a label, not a node).
+        std::wstring leading;
+        for (size_t k = i; k < l.size() && k < i + 9; ++k) leading += (wchar_t)towlower(l[k]);
+        if (leading.rfind(L"subgraph", 0) == 0 || leading.rfind(L"end", 0) == 0)
+            continue;
+
+        // Walk the line looking for `<id><open>...<close>` patterns. Skip
+        // any chars inside double-quoted strings to avoid false matches
+        // inside an existing quoted label.
+        size_t k = 0;
+        while (k < l.size()) {
+            wchar_t c = l[k];
+            // Double-quoted run — skip.
+            if (c == L'"') {
+                size_t q = k + 1;
+                while (q < l.size() && l[q] != L'"') {
+                    if (l[q] == L'\\' && q + 1 < l.size()) q += 2;
+                    else q++;
+                }
+                k = (q < l.size()) ? q + 1 : l.size();
+                continue;
+            }
+            if (!isIdStart(c)) { k++; continue; }
+
+            // Read identifier.
+            size_t idStart = k;
+            while (k < l.size() && isIdCont(l[k])) k++;
+            std::wstring nodeId = l.substr(idStart, k - idStart);
+            if (k >= l.size()) break;
+
+            // Reserved words that can sit next to a node id without one.
+            if (nodeId == L"flowchart" || nodeId == L"graph" ||
+                nodeId == L"subgraph" || nodeId == L"end" ||
+                nodeId == L"direction" || nodeId == L"linkStyle" ||
+                nodeId == L"classDef" || nodeId == L"class" ||
+                nodeId == L"click" || nodeId == L"style") {
+                continue;
+            }
+
+            wchar_t open = l[k];
+            if (open != L'[' && open != L'{' && open != L'(') continue;
+
+            // Find matching close. Be aware of:
+            //   - quoted label spans (skip everything between unescaped quotes)
+            //   - balanced parens for `A(("text"))` round-double form etc.
+            wchar_t close = (open == L'[') ? L']' : (open == L'{') ? L'}' : L')';
+            size_t labelStart = k + 1;
+            // Detect quoted form `A["..."]` and friends.
+            bool quoted = false;
+            if (labelStart < l.size() && l[labelStart] == L'"') quoted = true;
+
+            size_t scan = labelStart;
+            int depth = 1;
+            bool inQuote = false;
+            while (scan < l.size()) {
+                wchar_t s = l[scan];
+                if (inQuote) {
+                    if (s == L'\\' && scan + 1 < l.size()) { scan += 2; continue; }
+                    if (s == L'"') inQuote = false;
+                    scan++;
+                    continue;
+                }
+                if (s == L'"') { inQuote = true; scan++; continue; }
+                if (s == open)  { depth++; scan++; continue; }
+                if (s == close) { depth--; if (depth == 0) break; scan++; continue; }
+                scan++;
+            }
+            if (scan >= l.size() || depth != 0) {
+                // Unterminated; skip past this token to avoid getting stuck.
+                k = labelStart;
+                continue;
+            }
+            size_t labelEnd = scan; // exclusive
+
+            if (!alreadySeen(nodeId)) {
+                MermaidNodeRef ref;
+                ref.nodeId = nodeId;
+                ref.lineOffsetInBlock = lineIdx;
+                ref.labelStart = labelStart;
+                ref.labelEnd = labelEnd;
+                ref.openBracket = open;
+                ref.isQuoted = quoted;
+                // For quoted labels, narrow the range to inside the quotes
+                // so callers can replace just the human-readable text.
+                if (quoted && labelEnd > labelStart + 1 &&
+                    l[labelStart] == L'"' && l[labelEnd - 1] == L'"') {
+                    ref.labelStart = labelStart + 1;
+                    ref.labelEnd   = labelEnd - 1;
+                }
+                out.push_back(std::move(ref));
+                seen.push_back(nodeId);
+            }
+            k = scan + 1;
+        }
+    }
+
+    return out;
+}
+
+// ============================================================================
 // GetDocumentContent - unchanged from original
 // ============================================================================
 std::wstring MarkdownParser::GetDocumentContent(HWND hwndView)

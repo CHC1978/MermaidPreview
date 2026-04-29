@@ -409,6 +409,15 @@ void CMermaidFrame::OpenCustomBar(HWND hwndView, std::wstring prefetchedContent)
                     OnPreviewTextEdited(m_hWndLastView, lineStart, lineEnd, newText);
             });
 
+            // M2: register mermaid-node label inline-edit handler.
+            m_pWebView->SetEditMermaidNodeCallback(
+                [this](const std::wstring& blockId,
+                       const std::wstring& nodeId,
+                       const std::wstring& newLabel) {
+                    if (m_hWndLastView && IsWindow(m_hWndLastView))
+                        OnPreviewMermaidNodeEdited(m_hWndLastView, blockId, nodeId, newLabel);
+                });
+
             // Register theme change callback (from right-click context menu)
             m_pWebView->SetThemeCallback([this](bool dark) {
                 m_bDarkMode = dark;
@@ -1066,6 +1075,154 @@ void CMermaidFrame::OnPreviewTextEdited(HWND hwndView, int lineStart, int lineEn
     // Invalidate cache so preview re-renders
     m_nLastHash = 0;
     m_sLastContent.clear();
+}
+
+// ============================================================================
+// OnPreviewMermaidNodeEdited (M2)
+//
+// blockId is "mermaid-placeholder-N" (validated by the dispatcher).
+// We refresh the live document, locate the Nth mermaid block, then ask
+// MarkdownParser::ExtractFlowchartNodes to find the [labelStart, labelEnd)
+// span for this nodeId. Replace it in-place, optionally promote to the
+// quoted form when newLabel contains characters that would otherwise
+// terminate the bracket pair, and feed the rebuilt block through the
+// existing line-range writeback pipeline (OnPreviewTextEdited).
+// ============================================================================
+void CMermaidFrame::OnPreviewMermaidNodeEdited(HWND hwndView,
+                                               const std::wstring& blockId,
+                                               const std::wstring& nodeId,
+                                               const std::wstring& newLabel)
+{
+    if (!hwndView || !IsWindow(hwndView)) return;
+    if (blockId.size() <= 20) return; // "mermaid-placeholder-" + at least one digit
+
+    // Block index = trailing integer of blockId.
+    int blockIdx = 0;
+    for (size_t i = 20; i < blockId.size(); ++i) {
+        wchar_t c = blockId[i];
+        if (c < L'0' || c > L'9') return;
+        blockIdx = blockIdx * 10 + (c - L'0');
+        if (blockIdx > 100000) return; // sanity cap
+    }
+
+    // Pull the freshest content from EmEditor — m_sLastContent may be stale
+    // if the user typed in the editor between render and edit-commit.
+    std::wstring content = MarkdownParser::GetDocumentContent(hwndView);
+    auto blocks = MarkdownParser::ExtractMermaidBlocks(content);
+    if (blockIdx < 0 || blockIdx >= (int)blocks.size()) return;
+    const MermaidBlock& blk = blocks[blockIdx];
+
+    auto nodes = MarkdownParser::ExtractFlowchartNodes(blk.code);
+    const MermaidNodeRef* ref = nullptr;
+    for (const auto& n : nodes) { if (n.nodeId == nodeId) { ref = &n; break; } }
+    if (!ref) return;
+
+    // Split block.code into lines (preserve content; we'll rejoin with \n).
+    std::vector<std::wstring> lines;
+    {
+        size_t pos = 0;
+        while (pos <= blk.code.size()) {
+            size_t eol = blk.code.find(L'\n', pos);
+            if (eol == std::wstring::npos) eol = blk.code.size();
+            std::wstring l = blk.code.substr(pos, eol - pos);
+            if (!l.empty() && l.back() == L'\r') l.pop_back();
+            lines.push_back(std::move(l));
+            if (eol >= blk.code.size()) break;
+            pos = eol + 1;
+        }
+    }
+    if (ref->lineOffsetInBlock < 0 || ref->lineOffsetInBlock >= (int)lines.size())
+        return;
+    std::wstring& targetLine = lines[ref->lineOffsetInBlock];
+    if (ref->labelStart > ref->labelEnd || ref->labelEnd > targetLine.size())
+        return;
+
+    // Convert UI '\n' back to mermaid '<br/>'. Strip stray \r.
+    std::wstring serialized;
+    serialized.reserve(newLabel.size() + 8);
+    for (wchar_t c : newLabel) {
+        if (c == L'\r') continue;
+        if (c == L'\n') serialized += L"<br/>";
+        else            serialized += c;
+    }
+
+    // Decide whether the resulting label requires quoting. Bare labels
+    // can't contain the matching close bracket, double-quote or pipe.
+    wchar_t close = (ref->openBracket == L'[') ? L']'
+                  : (ref->openBracket == L'{') ? L'}' : L')';
+    bool needsQuote = false;
+    for (wchar_t c : serialized) {
+        if (c == close || c == L'"' || c == L'|') { needsQuote = true; break; }
+    }
+
+    std::wstring replacement;
+    if (ref->isQuoted) {
+        // Already inside quotes — escape any inner '"' to keep it parsable.
+        replacement.reserve(serialized.size() + 4);
+        for (wchar_t c : serialized) {
+            if (c == L'"') replacement += L"#quot;"; // mermaid 11 entity
+            else           replacement += c;
+        }
+    } else if (needsQuote) {
+        replacement.reserve(serialized.size() + 2);
+        replacement += L'"';
+        for (wchar_t c : serialized) {
+            if (c == L'"') replacement += L"#quot;";
+            else           replacement += c;
+        }
+        replacement += L'"';
+    } else {
+        replacement = serialized;
+    }
+
+    // Splice into the source line.
+    targetLine = targetLine.substr(0, ref->labelStart)
+               + replacement
+               + targetLine.substr(ref->labelEnd);
+
+    // Rebuild the full mermaid block text — fences + body — to feed back
+    // through the existing line-range edit path. ExtractMermaidBlocks
+    // sets startLine = the ```mermaid line and endLine = the closing ```.
+    std::wstring newBlock;
+    // Reconstruct opening fence line by reading the actual document line —
+    // keep any leading whitespace / language tag untouched.
+    {
+        UINT_PTR totalLines = (UINT_PTR)SendMessage(
+            hwndView, EE_GET_LINES, (WPARAM)0, 0);
+        if (blk.startLine < 0 || blk.startLine >= (int)totalLines) return;
+
+        // Read a single line from EmEditor (mirrors MarkdownParser::GetDocumentContent).
+        auto getLine = [&](int y) -> std::wstring {
+            GET_LINE_INFO gli = {};
+            gli.cch = 0;
+            gli.flags = 0;
+            gli.yLine = (UINT_PTR)y;
+            UINT_PTR cch = (UINT_PTR)SendMessage(
+                hwndView, EE_GET_LINEW, (WPARAM)&gli, (LPARAM)nullptr);
+            std::wstring buf;
+            if (cch == 0) return buf;
+            buf.assign(cch, L'\0');
+            gli.cch = cch;
+            SendMessage(hwndView, EE_GET_LINEW, (WPARAM)&gli, (LPARAM)buf.data());
+            while (!buf.empty() && buf.back() == L'\0') buf.pop_back();
+            return buf;
+        };
+        std::wstring openFence = getLine(blk.startLine);
+        std::wstring closeFence = (blk.endLine >= 0 && blk.endLine < (int)totalLines)
+                                    ? getLine(blk.endLine)
+                                    : L"```";
+        newBlock += openFence; newBlock += L"\n";
+        for (size_t i = 0; i < lines.size(); ++i) {
+            newBlock += lines[i];
+            newBlock += L"\n";
+        }
+        newBlock += closeFence;
+    }
+
+    // Reuse the existing line-range writeback so EmEditor undo, scroll
+    // sync flags and m_*Last* invalidation all behave identically to the
+    // plain-text edit path.
+    OnPreviewTextEdited(hwndView, blk.startLine, blk.endLine, newBlock);
 }
 
 // ============================================================================
