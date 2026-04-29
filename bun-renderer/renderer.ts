@@ -187,7 +187,7 @@ mermaid.initialize({
     securityLevel: 'strict',
     theme: currentTheme,
     look: currentLook,
-    flowchart: { useMaxWidth: true },
+    flowchart: { useMaxWidth: true, nodeSpacing: 60, rankSpacing: 80, curve: 'basis' },
     sequence: { useMaxWidth: true },
     architecture: { randomize: false },
 });
@@ -236,7 +236,7 @@ for await (const chunk of Bun.stdin.stream()) {
                         securityLevel: 'strict',
                         theme: currentTheme,
                         look: currentLook,
-                        flowchart: { useMaxWidth: true },
+                        flowchart: { useMaxWidth: true, nodeSpacing: 60, rankSpacing: 80, curve: 'basis' },
                         sequence: { useMaxWidth: true },
                         architecture: { randomize: false },
                     });

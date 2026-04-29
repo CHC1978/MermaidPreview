@@ -154,13 +154,38 @@ std::wstring WebView2Manager::BuildHtmlPage() const
   th, td { padding: 6px 12px; border: 1px solid; text-align: left; } th { font-weight: 600; }
   .task-list-item { list-style: none; margin-left: -1.5em; }
   .task-list-item input[type="checkbox"] { margin-right: 0.5em; }
-  .mermaid-container { margin: 1em 0; overflow: hidden; cursor: grab; text-align: center; position: relative; border-radius: 4px; min-height: 40px; }
+  /* Default = horizontal scroll when SVG is naturally wider than the pane.
+     Pan/zoom modes switch back to overflow:hidden so the CSS transform
+     doesn't push surrounding content. (Audit follow-up: wide RE flowcharts
+     used to be silently clipped on the right.) */
+  .mermaid-container { margin: 1em 0; overflow-x: auto; overflow-y: hidden; cursor: grab; text-align: center; position: relative; border-radius: 4px; min-height: 40px; }
+  .mermaid-container.dragging,
+  .mermaid-container.zoom-active { overflow: hidden; }
   .mermaid-container.dragging { cursor: grabbing; }
   .mermaid-container.zoom-active { outline: 2px dashed #0969da; outline-offset: 2px; cursor: zoom-in; }
   body.dark .mermaid-container.zoom-active { outline-color: #58a6ff; }
   .mermaid-container.zoom-active .svg-zoom-badge { opacity:1 !important; background:rgba(9,105,218,0.7); }
   body.dark .mermaid-container.zoom-active .svg-zoom-badge { background:rgba(88,166,255,0.7); }
   .mermaid-container svg { display: inline-block; max-width: 100%; height: auto; transform-origin: 0 0; user-select: none; }
+  /* When the user is actively zooming/panning, let the SVG render at its
+     natural size so the in-pane scroll bar is the right escape hatch. */
+  .mermaid-container.zoom-active svg { max-width: none; }
+  /* Edge-label visibility hardening (mermaid 11.14 emits 0.5–0.8 alpha
+     and paints labels BEFORE nodes — see liftEdgeLabels for the painter
+     fix). Force fully-opaque background + a stroke halo on the text so
+     even partial overlaps stay readable. */
+  .mermaid-container svg .edgeLabel,
+  .mermaid-container svg .labelBkg { background-color: #ffffff !important; }
+  .mermaid-container svg .edgeLabel rect,
+  .mermaid-container svg .edgeLabel foreignObject > div { background-color: #ffffff !important; opacity: 1 !important; }
+  .mermaid-container svg .edgeLabel text,
+  .mermaid-container svg .edgeLabel span { paint-order: stroke; stroke: #ffffff; stroke-width: 3px; }
+  body.dark .mermaid-container svg .edgeLabel,
+  body.dark .mermaid-container svg .labelBkg { background-color: #1e1e1e !important; }
+  body.dark .mermaid-container svg .edgeLabel rect,
+  body.dark .mermaid-container svg .edgeLabel foreignObject > div { background-color: #1e1e1e !important; opacity: 1 !important; }
+  body.dark .mermaid-container svg .edgeLabel text,
+  body.dark .mermaid-container svg .edgeLabel span { paint-order: stroke; stroke: #1e1e1e; stroke-width: 3px; }
   .mermaid-error { padding: 8px 12px; border-radius: 4px; font-size: 0.85em; margin: 0.5em 0; }
   #ctx-menu { display:none; position:fixed; z-index:9999; min-width:180px; padding:4px 0; background:#fff; border:1px solid #d0d7de; border-radius:6px; box-shadow:0 4px 16px rgba(0,0,0,0.12); font-size:13px; }
   body.dark #ctx-menu { background:#2d2d2d; border-color:#444; }
@@ -196,6 +221,8 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     <div class="ctx-item ctx-action" data-action="zoom-in">Zoom In</div>
     <div class="ctx-item ctx-action" data-action="zoom-out">Zoom Out</div>
     <div class="ctx-item ctx-action" data-action="reset">Reset View</div>
+    <div class="ctx-item ctx-action" data-action="fit-width">Fit to Width</div>
+    <div class="ctx-item ctx-action" data-action="actual-size">Actual Size</div>
     <div class="ctx-sep"></div>
     <div class="ctx-item ctx-action" data-action="font-up">Font Size +</div>
     <div class="ctx-item ctx-action" data-action="font-down">Font Size -</div>
@@ -213,16 +240,35 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     // Single chokepoint for mermaid.initialize (11.14+ feature surface).
     // theme: 'default' | 'dark' | 'neutral' | 'forest' | 'base'
     // look : 'classic' (default) | 'neo' | 'handDrawn'
+    //
+    // The flowchart spacing values are intentionally generous (default 50/50):
+    // RE/architecture diagrams pack many subgraph layers and long edge labels,
+    // and mermaid 11.14's dagre layout otherwise jams labels into nodes.
+    // 'basis' curves give labels a smoother corridor than the default linear.
     function _mmdInit(theme, look) {
       mermaid.initialize({
         startOnLoad: false,
         securityLevel: 'strict',
         theme: theme || 'default',
         look: look || 'classic',
-        flowchart: { useMaxWidth: true },
+        flowchart: { useMaxWidth: true, nodeSpacing: 60, rankSpacing: 80, curve: 'basis' },
         sequence: { useMaxWidth: true },
         architecture: { randomize: false }
       });
+    }
+
+    // Lift <g.edgeLabels> after <g.nodes> so labels paint on top — mermaid's
+    // default DOM order paints nodes over labels, which is what produced the
+    // overlap the user reported in the RE flowchart.
+    function _liftEdgeLabels(root) {
+      if (!root) return;
+      var svgs = root.querySelectorAll ? root.querySelectorAll('svg') : [];
+      for (var k = 0; k < svgs.length; k++) {
+        var rootG = svgs[k].querySelector(':scope > g');
+        if (!rootG) continue;
+        var labelsG = rootG.querySelector(':scope > g.edgeLabels');
+        if (labelsG) rootG.appendChild(labelsG); // last child = drawn last = top-most
+      }
     }
 
     // Async load mermaid.min.js — does not block NavigationCompleted
@@ -260,6 +306,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       }
       renderedMermaidSrcs = newSrcs;
       container.querySelectorAll('.mermaid-container').forEach(initSvgDrag);
+      _liftEdgeLabels(container);
     }
 
     window.renderContent = async function(htmlContent, theme) {
@@ -294,6 +341,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
         _pendingRender = { theme: theme };
       }
       container.querySelectorAll('.mermaid-container').forEach(initSvgDrag);
+      _liftEdgeLabels(container);
     };
     window.setTheme = function(dark) { document.body.className = dark ? 'dark' : 'light'; };
     window.clearContent = function() { document.getElementById('content').innerHTML = '<div class="empty">Open a Markdown file to preview</div>'; renderedMermaidSrcs = {}; _pendingRender = null; };
@@ -414,9 +462,40 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     document.querySelectorAll('.ctx-theme').forEach(function(el){ el.addEventListener('click',function(){ switchTheme(this.dataset.dark==='true'); ctxMenu.style.display='none'; }); });
     document.querySelectorAll('.ctx-action').forEach(function(el){ el.addEventListener('click',function(){
       var a=this.dataset.action;
-      if(a==='zoom-in') svgZoomAll(1.25); else if(a==='zoom-out') svgZoomAll(0.8); else if(a==='reset') svgResetAll(); else if(a==='font-up') fontSizeChange(2); else if(a==='font-down') fontSizeChange(-2); else if(a==='font-reset') fontSizeReset();
+      if(a==='zoom-in') svgZoomAll(1.25);
+      else if(a==='zoom-out') svgZoomAll(0.8);
+      else if(a==='reset') svgResetAll();
+      else if(a==='fit-width') svgFitWidthAll();
+      else if(a==='actual-size') svgActualSizeAll();
+      else if(a==='font-up') fontSizeChange(2);
+      else if(a==='font-down') fontSizeChange(-2);
+      else if(a==='font-reset') fontSizeReset();
       ctxMenu.style.display='none';
     }); });
+
+    // Fit to Width: clear any pan/zoom transform and re-clamp SVG to
+    // container width via the default `max-width: 100%` rule (i.e. drop
+    // the .zoom-active state, which is what `max-width: none` came from).
+    function svgFitWidthAll(){
+      document.querySelectorAll('.mermaid-container').forEach(function(c){
+        c.classList.remove('zoom-active');
+        var svg = c.querySelector('svg');
+        if(svg){ applySvgState(svg, {tx:0, ty:0, scale:1}); }
+      });
+      if(zoomTarget){ zoomTarget=null; }
+    }
+    // Actual Size: render at SVG's natural width and let the container's
+    // default overflow-x:auto scroll. We drop .zoom-active so the
+    // overflow:hidden side-effect doesn't kick in, and set maxWidth:none
+    // inline (cleared on next render, which is the desired session-scope).
+    function svgActualSizeAll(){
+      document.querySelectorAll('.mermaid-container').forEach(function(c){
+        c.classList.remove('zoom-active');
+        var svg = c.querySelector('svg');
+        if(svg){ svg.style.maxWidth = 'none'; applySvgState(svg, {tx:0, ty:0, scale:1}); }
+      });
+      if(zoomTarget){ zoomTarget=null; }
+    }
 
     function switchTheme(dark) {
       document.body.className = dark ? 'dark' : 'light';
@@ -424,7 +503,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
         _mmdInit(dark ? 'dark' : 'default');
         document.querySelectorAll('.mermaid-container[data-mermaid-src]').forEach(function(el,idx){
           var src = decodeURIComponent(el.getAttribute('data-mermaid-src'));
-          mermaid.render('ts-'+idx+'-'+Date.now(), src).then(function(r){ el.innerHTML=r.svg; initSvgDrag(el); }).catch(function(){});
+          mermaid.render('ts-'+idx+'-'+Date.now(), src).then(function(r){ el.innerHTML=r.svg; initSvgDrag(el); _liftEdgeLabels(el); }).catch(function(){});
         });
       }
       window.chrome.webview.postMessage({type:'theme',dark:dark});
