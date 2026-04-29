@@ -198,6 +198,18 @@ std::wstring WebView2Manager::BuildHtmlPage() const
   body.dark .ctx-sep { border-color:#444; }
   .svg-zoom-badge { position:absolute; top:4px; right:4px; background:rgba(0,0,0,0.5); color:#fff; font-size:11px; padding:1px 6px; border-radius:3px; pointer-events:none; opacity:0; transition:opacity 0.2s; }
   .mermaid-container:hover .svg-zoom-badge { opacity:1; }
+  /* Expand-to-pane button (sits next to .svg-zoom-badge) */
+  .mermaid-expand-btn { position:absolute; top:4px; right:50px; background:rgba(0,0,0,0.5); color:#fff; font-size:13px; line-height:1; padding:3px 7px; border:0; border-radius:3px; cursor:pointer; opacity:0; transition:opacity 0.2s; font-family:inherit; }
+  .mermaid-container:hover .mermaid-expand-btn,
+  .mermaid-container.mp-expanded .mermaid-expand-btn { opacity:1; }
+  .mermaid-expand-btn:hover { background:rgba(9,105,218,0.85); }
+  body.dark .mermaid-expand-btn:hover { background:rgba(88,166,255,0.85); }
+  /* Fullscreen takeover: one container fills the entire preview pane,
+     scroll bars handle anything bigger. body.mp-fs hides the rest. */
+  body.mp-fs > #content > :not(.mermaid-container.mp-expanded) { display:none; }
+  .mermaid-container.mp-expanded { position:fixed; inset:0; z-index:10000; margin:0; border-radius:0; overflow:auto; background:#ffffff; padding:24px; }
+  body.dark .mermaid-container.mp-expanded { background:#1e1e1e; }
+  .mermaid-container.mp-expanded svg { max-width:none; }
   .loading,.empty { text-align:center; color:#999; padding:40px 16px; font-size:14px; }
   body.dark .loading, body.dark .empty { color:#666; }
   #content > :first-child { margin-top: 0; }
@@ -271,6 +283,46 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       }
     }
 
+    // Inject (or refresh) the ⛶ expand button on a mermaid container.
+    function _addExpandBtn(container) {
+      if (!container || container.querySelector(':scope > .mermaid-expand-btn')) return;
+      var btn = document.createElement('button');
+      btn.className = 'mermaid-expand-btn';
+      btn.type = 'button';
+      btn.title = 'Expand to full preview (Esc to exit)';
+      btn.textContent = '⛶';
+      btn.addEventListener('mousedown', function(e){ e.stopPropagation(); });
+      btn.addEventListener('click', function(e){
+        e.stopPropagation(); e.preventDefault();
+        toggleMermaidExpand(container);
+      });
+      container.appendChild(btn);
+    }
+
+    function toggleMermaidExpand(container) {
+      var expanded = container.classList.toggle('mp-expanded');
+      // Toggle body class only when *some* container is expanded.
+      if (expanded) {
+        // Make sure no other container is left expanded.
+        document.querySelectorAll('.mermaid-container.mp-expanded').forEach(function(c){
+          if (c !== container) c.classList.remove('mp-expanded');
+        });
+        document.body.classList.add('mp-fs');
+      } else {
+        document.body.classList.remove('mp-fs');
+      }
+    }
+
+    // Global Esc → exit fullscreen if any container is expanded.
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape' && document.body.classList.contains('mp-fs')) {
+        document.querySelectorAll('.mermaid-container.mp-expanded').forEach(function(c){
+          c.classList.remove('mp-expanded');
+        });
+        document.body.classList.remove('mp-fs');
+      }
+    });
+
     // Async load mermaid.min.js — does not block NavigationCompleted
     (function(){
       var s = document.createElement('script');
@@ -305,7 +357,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
         }
       }
       renderedMermaidSrcs = newSrcs;
-      container.querySelectorAll('.mermaid-container').forEach(initSvgDrag);
+      container.querySelectorAll('.mermaid-container').forEach(function(c){ initSvgDrag(c); _addExpandBtn(c); });
       _liftEdgeLabels(container);
     }
 
@@ -340,7 +392,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       } else {
         _pendingRender = { theme: theme };
       }
-      container.querySelectorAll('.mermaid-container').forEach(initSvgDrag);
+      container.querySelectorAll('.mermaid-container').forEach(function(c){ initSvgDrag(c); _addExpandBtn(c); });
       _liftEdgeLabels(container);
     };
     window.setTheme = function(dark) { document.body.className = dark ? 'dark' : 'light'; };
@@ -574,7 +626,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
         _mmdInit(dark ? 'dark' : 'default');
         document.querySelectorAll('.mermaid-container[data-mermaid-src]').forEach(function(el,idx){
           var src = decodeURIComponent(el.getAttribute('data-mermaid-src'));
-          mermaid.render('ts-'+idx+'-'+Date.now(), src).then(function(r){ el.innerHTML=r.svg; initSvgDrag(el); _liftEdgeLabels(el); }).catch(function(){});
+          mermaid.render('ts-'+idx+'-'+Date.now(), src).then(function(r){ el.innerHTML=r.svg; initSvgDrag(el); _addExpandBtn(el); _liftEdgeLabels(el); }).catch(function(){});
         });
       }
       window.chrome.webview.postMessage({type:'theme',dark:dark});
