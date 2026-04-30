@@ -1254,6 +1254,13 @@ void CMermaidFrame::OnPreviewMermaidBlockEdited(HWND hwndView,
         if (blockIdx > 100000) return;
     }
 
+    // SEC-006: refuse any body that contains a fence-closing sequence —
+    // a triple backtick inside the new mermaid source would prematurely
+    // terminate the markdown code fence on writeback and corrupt the doc
+    // structure. mermaid.parse on the JS side normally rejects such
+    // input, but this is a defence-in-depth check we can do for free.
+    if (newSource.find(L"```") != std::wstring::npos) return;
+
     std::wstring content = MarkdownParser::GetDocumentContent(hwndView);
     auto blocks = MarkdownParser::ExtractMermaidBlocks(content);
     if (blockIdx < 0 || blockIdx >= (int)blocks.size()) return;

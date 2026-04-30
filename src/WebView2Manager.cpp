@@ -338,6 +338,10 @@ std::wstring WebView2Manager::BuildHtmlPage() const
 
       // Build a stylistic clone in a hidden div appended to <body>. This
       // dodges every SVG-side clipping rule because it's pure HTML layout.
+      // PERF-002: batch — every probe is appended before any offsetWidth
+      // read, so the browser only forces layout once per render instead
+      // of once per cluster (was the per-iteration alternation between
+      // appendChild + offsetWidth that triggered K reflows).
       var measurer = document.createElement('div');
       measurer.setAttribute('aria-hidden', 'true');
       measurer.style.cssText = [
@@ -345,28 +349,37 @@ std::wstring WebView2Manager::BuildHtmlPage() const
         'visibility:hidden', 'white-space:nowrap',
         'font-family:inherit', 'font-size:inherit'
       ].join(';');
+      var probes = [];
+      for (var i = 0; i < fos.length; i++) {
+        var fo = fos[i];
+        var inner = fo.querySelector('div');
+        if (!inner) { probes.push(null); continue; }
+        var probe = document.createElement('div');
+        probe.style.cssText = 'display:inline-block;white-space:nowrap;';
+        // Keep innerHTML so font-weight / nested span styling participates
+        // in the measurement — using textContent would under-measure bold
+        // titles and re-clip them. mermaid 11 strict-mode sanitizes its
+        // own output, so the SVG-derived markup is already safe.
+        probe.innerHTML = inner.innerHTML;
+        measurer.appendChild(probe);
+        probes.push({ fo: fo, inner: inner, probe: probe });
+      }
       document.body.appendChild(measurer);
       try {
-        for (var i = 0; i < fos.length; i++) {
-          var fo = fos[i];
-          var inner = fo.querySelector('div');
-          if (!inner) continue;
-          measurer.innerHTML = '';
-          // Clone children so any text-styling spans come along, but
-          // wrap them in a fresh container that has no inherited width.
-          var probe = document.createElement('div');
-          probe.style.cssText = 'display:inline-block;white-space:nowrap;';
-          probe.innerHTML = inner.innerHTML;
-          measurer.appendChild(probe);
-          var w = Math.ceil(probe.offsetWidth || probe.scrollWidth || 0);
-          var h = Math.ceil(probe.offsetHeight || probe.scrollHeight || 0);
+        // Single forced reflow for the whole measurer; subsequent reads in
+        // this loop hit cached layout.
+        for (var j = 0; j < probes.length; j++) {
+          var p = probes[j];
+          if (!p) continue;
+          var w = Math.ceil(p.probe.offsetWidth || p.probe.scrollWidth || 0);
+          var h = Math.ceil(p.probe.offsetHeight || p.probe.scrollHeight || 0);
           if (w > 0) {
-            fo.setAttribute('width', String(w + 12));
-            inner.style.width    = (w + 12) + 'px';
-            inner.style.maxWidth = 'none';
-            inner.style.whiteSpace = 'nowrap';
+            p.fo.setAttribute('width', String(w + 12));
+            p.inner.style.width    = (w + 12) + 'px';
+            p.inner.style.maxWidth = 'none';
+            p.inner.style.whiteSpace = 'nowrap';
           }
-          if (h > 0) fo.setAttribute('height', String(h + 4));
+          if (h > 0) p.fo.setAttribute('height', String(h + 4));
         }
       } catch (_) { /* swallow — keep render alive */ }
       finally {
@@ -434,6 +447,9 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       var edgeLabels = svg.querySelectorAll('g.edgeLabels g.label');
       var clusterLabels = svg.querySelectorAll('g.cluster-label');
       if (!nodes.length || (!edgeLabels.length && !clusterLabels.length)) return [];
+      // Chromium coalesces consecutive layout reads as long as no DOM /
+      // style write happens between them; this loop is read-only so we
+      // get a single layout flush even though it walks N + M + K rects.
       var nodeBoxes = [];
       for (var i = 0; i < nodes.length; i++) {
         var nb = nodes[i].getBoundingClientRect();
@@ -488,6 +504,11 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     html += LR"P1ca(
     function _refreshAutoFixBtnNow(container) {
       var hits = _detectOverlaps(container);
+      // PERF-006: stash the latest detection result so `_applyAutoFix`
+      // can read it instead of re-running the N×M intersection scan.
+      // Stored as a non-enumerable expando — never serialized into the
+      // DOM, never round-tripped to C++.
+      container.__mpHits = hits;
       var btn = container.querySelector(':scope > .mermaid-autofix-btn');
       var toast = container.querySelector(':scope > .mermaid-autofix-toast');
       if (hits.length === 0) {
@@ -543,7 +564,12 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       try { src = decodeURIComponent(rawSrc); }
       catch(_) { _showToast(container, 'Cannot decode source', true); return; }
 
-      var hits = _detectOverlaps(container);
+      // PERF-006: prefer the cached hits set populated by the most
+      // recent `_refreshAutoFixBtnNow`; fall back to a fresh scan only
+      // if the cache is missing (e.g. the user clicked very early).
+      var hits = (container.__mpHits && container.__mpHits.length)
+                   ? container.__mpHits
+                   : _detectOverlaps(container);
       var hasCluster = hits.some(function(h){ return h.kind === 'cluster'; });
       var hasEdge    = hits.some(function(h){ return h.kind === 'edge'; });
       if (!hits.length) { _showToast(container, 'No overlap to fix', false); return; }
@@ -596,7 +622,10 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     function _injectSpacingDirective(src) {
       var rxRank = /(rankSpacing\s*:\s*)(\d+)/;
       var rxNode = /(nodeSpacing\s*:\s*)(\d+)/;
-      var hasDirective = /%%\{[^%]*init[^%]*\}%%/.test(src);
+      // QUALITY-001: tightened class — `[^%]*` was wide enough to span
+      // two adjacent `%%{...}%%` directives, falsely reporting a single
+      // big "init" directive when only an unrelated one was present.
+      var hasDirective = /%%\{[^%{}]*init[^%{}]*\}%%/.test(src);
       if (hasDirective && (rxRank.test(src) || rxNode.test(src))) {
         var bumped = src
           .replace(rxRank, function(_, p, n){ return p + Math.min(300, parseInt(n) + 30); })
@@ -632,6 +661,13 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       return src.replace(rx, function(whole, head, title, tail) {
         if (/<br\s*\/?>/i.test(title)) return whole;
         if (title.length <= 28) return whole;
+        // SEC-002: refuse to rewrite titles that contain mermaid grammar
+        // tokens which could be smuggled into the source by the rewrite
+        // step (e.g. `%%{init...}%%` directives, edge syntax `-->` /
+        // `---`, or stray newline / `"` that would corrupt the quoted
+        // title once we splice in `<br/>`). The user can hand-edit such
+        // titles; the auto-fixer never touches them.
+        if (/%%|-->|---|\r|\n|"/.test(title)) return whole;
         // Split into roughly-equal halves at the nearest whitespace to mid.
         var mid = Math.floor(title.length / 2);
         var lo = title.lastIndexOf(' ', mid);
@@ -1392,6 +1428,35 @@ void WebView2Manager::SetEditCallback(EditCallback callback)
                                 case L'"':  v += L'"';  kp += 2; break;
                                 case L'\\': v += L'\\'; kp += 2; break;
                                 case L'/':  v += L'/';  kp += 2; break;
+                                case L'b':  v += L'\b'; kp += 2; break;
+                                case L'f':  v += L'\f'; kp += 2; break;
+                                case L'u': {
+                                    // SEC-004: JSON requires \uXXXX decoding.
+                                    // JS-side JSON.stringify escapes CJK and
+                                    // emoji as \uXXXX; without this the file
+                                    // gets a literal backslash-u-... written
+                                    // back, silently corrupting node labels.
+                                    if (kp + 5 < json.size()) {
+                                        unsigned int code = 0;
+                                        bool hexOk = true;
+                                        for (int di = 2; di <= 5; ++di) {
+                                            wchar_t hc = json[kp + di];
+                                            int hv = (hc >= L'0' && hc <= L'9') ? (hc - L'0')
+                                                   : (hc >= L'a' && hc <= L'f') ? (hc - L'a' + 10)
+                                                   : (hc >= L'A' && hc <= L'F') ? (hc - L'A' + 10) : -1;
+                                            if (hv < 0) { hexOk = false; break; }
+                                            code = (code << 4) | static_cast<unsigned int>(hv);
+                                        }
+                                        if (hexOk) {
+                                            v += static_cast<wchar_t>(code & 0xFFFF);
+                                            kp += 6;
+                                            break;
+                                        }
+                                    }
+                                    // Malformed \u — emit literal backslash and
+                                    // let the rest re-scan as plain text.
+                                    v += json[kp]; ++kp; break;
+                                }
                                 default:    v += json[kp]; ++kp; break;
                                 }
                             } else { v += json[kp]; ++kp; }
@@ -1438,6 +1503,35 @@ void WebView2Manager::SetEditCallback(EditCallback callback)
                                 case L'"':  v += L'"';  kp += 2; break;
                                 case L'\\': v += L'\\'; kp += 2; break;
                                 case L'/':  v += L'/';  kp += 2; break;
+                                case L'b':  v += L'\b'; kp += 2; break;
+                                case L'f':  v += L'\f'; kp += 2; break;
+                                case L'u': {
+                                    // SEC-004: JSON requires \uXXXX decoding.
+                                    // JS-side JSON.stringify escapes CJK and
+                                    // emoji as \uXXXX; without this the file
+                                    // gets a literal backslash-u-... written
+                                    // back, silently corrupting node labels.
+                                    if (kp + 5 < json.size()) {
+                                        unsigned int code = 0;
+                                        bool hexOk = true;
+                                        for (int di = 2; di <= 5; ++di) {
+                                            wchar_t hc = json[kp + di];
+                                            int hv = (hc >= L'0' && hc <= L'9') ? (hc - L'0')
+                                                   : (hc >= L'a' && hc <= L'f') ? (hc - L'a' + 10)
+                                                   : (hc >= L'A' && hc <= L'F') ? (hc - L'A' + 10) : -1;
+                                            if (hv < 0) { hexOk = false; break; }
+                                            code = (code << 4) | static_cast<unsigned int>(hv);
+                                        }
+                                        if (hexOk) {
+                                            v += static_cast<wchar_t>(code & 0xFFFF);
+                                            kp += 6;
+                                            break;
+                                        }
+                                    }
+                                    // Malformed \u — emit literal backslash and
+                                    // let the rest re-scan as plain text.
+                                    v += json[kp]; ++kp; break;
+                                }
                                 default:    v += json[kp]; ++kp; break;
                                 }
                             } else { v += json[kp]; ++kp; }
@@ -1457,7 +1551,10 @@ void WebView2Manager::SetEditCallback(EditCallback callback)
                         if (blockId.size() <= 20) blockOk = false;
                     }
                     // Validate nodeId — mermaid identifier grammar.
-                    bool nodeOk = !nodeId.empty();
+                    // SEC-003: cap length to defend against future SVG-id
+                    // schema changes that could make capture group `.+`
+                    // gobble unrelated suffixes; mermaid IDs are short.
+                    bool nodeOk = !nodeId.empty() && nodeId.size() <= 128;
                     for (wchar_t c : nodeId) {
                         if (!((c >= L'A' && c <= L'Z') || (c >= L'a' && c <= L'z') ||
                               (c >= L'0' && c <= L'9') || c == L'_' || c == L'-')) {

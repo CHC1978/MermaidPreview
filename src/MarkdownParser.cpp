@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 
 // ============================================================================
 // ExtractMermaidBlocks - unchanged from original
@@ -129,10 +130,12 @@ MarkdownParser::ExtractFlowchartNodes(const std::wstring& blockSource)
     if (!isFlowchart) return out;
 
     // Track which ids we've already accepted so re-uses don't double-emit.
-    std::vector<std::wstring> seen;
+    // PERF-005: hash set instead of linear vector — the inline-edit path
+    // calls this on every keystroke, and a 100-node block was O(N²)
+    // worst-case (~10k string compares per call).
+    std::unordered_set<std::wstring> seen;
     auto alreadySeen = [&](const std::wstring& id) {
-        for (const auto& s : seen) if (s == id) return true;
-        return false;
+        return seen.find(id) != seen.end();
     };
 
     for (int lineIdx = 0; lineIdx < (int)lines.size(); ++lineIdx) {
@@ -233,8 +236,8 @@ MarkdownParser::ExtractFlowchartNodes(const std::wstring& blockSource)
                     ref.labelStart = labelStart + 1;
                     ref.labelEnd   = labelEnd - 1;
                 }
+                seen.insert(nodeId);
                 out.push_back(std::move(ref));
-                seen.push_back(nodeId);
             }
             k = scan + 1;
         }
