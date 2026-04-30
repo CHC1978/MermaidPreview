@@ -184,6 +184,14 @@ std::wstring WebView2Manager::BuildHtmlPage() const
   .mermaid-container svg .edgeLabel foreignObject > div,
   .mermaid-container svg .cluster-label rect,
   .mermaid-container svg .cluster-label foreignObject > div { background-color: #ffffff !important; opacity: 1 !important; }
+  /* Mermaid sets `white-space: nowrap` + a 200 px max-width on cluster-label
+     foreignObjects; that's what truncated the user's "BRIDGE -- Src to ring
+     buffer to snapshot" into "snap…" with a CSS ellipsis. Allow the title
+     to wrap onto multiple lines so it stays inside the cluster header
+     strip without an ellipsis. Edge labels keep their default behaviour
+     (they're positioned per-edge and benefit from staying single-line). */
+  .mermaid-container svg .cluster-label foreignObject > div { white-space: normal !important; max-width: none !important; }
+  .mermaid-container svg .cluster-label foreignObject { overflow: visible !important; }
   .mermaid-container svg .edgeLabel text,
   .mermaid-container svg .edgeLabel span,
   .mermaid-container svg .cluster-label text,
@@ -407,7 +415,27 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     // Inject (or remove) the ⚠ Auto-fix button on a container based on
     // whether overlaps are present. Idempotent — safe to call after every
     // render or theme switch.
+    //
+    // Detection runs in requestAnimationFrame so the synchronous
+    // getBoundingClientRect() walk doesn't tax-on top of the
+    // mermaid render commit (each call forces a style + layout flush;
+    // the user's 14-node flowcharts noticed it as a slow open).
     function _refreshAutoFixBtn(container) {
+      // Cheap pre-check: if there's no SVG yet (placeholder still empty),
+      // there's nothing to measure — skip the rAF entirely.
+      if (!container || !container.querySelector || !container.querySelector('svg')) {
+        if (container) container.classList.remove('mp-has-overlap');
+        return;
+      }
+      var raf = window.requestAnimationFrame || function(cb){ return setTimeout(cb, 16); };
+      raf(function(){ _refreshAutoFixBtnNow(container); });
+    }
+)P1c";
+
+    // Continue Part 1c in a fresh raw string — adding the deferred-render
+    // helper pushed us back over MSVC's 16380-char string-literal limit.
+    html += LR"P1ca(
+    function _refreshAutoFixBtnNow(container) {
       var hits = _detectOverlaps(container);
       var btn = container.querySelector(':scope > .mermaid-autofix-btn');
       var toast = container.querySelector(':scope > .mermaid-autofix-toast');
@@ -539,7 +567,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       lines.splice(insertAt, 0, directive);
       return lines.join('\n');
     }
-)P1c";
+)P1ca";
 
     // Continue Part 1c in a fresh raw string — adding the cluster-title
     // wrapper pushed past MSVC's 16380-char string-literal limit.
