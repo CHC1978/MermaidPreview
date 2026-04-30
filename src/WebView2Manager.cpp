@@ -170,22 +170,35 @@ std::wstring WebView2Manager::BuildHtmlPage() const
   /* When the user is actively zooming/panning, let the SVG render at its
      natural size so the in-pane scroll bar is the right escape hatch. */
   .mermaid-container.zoom-active svg { max-width: none; }
-  /* Edge-label visibility hardening (mermaid 11.14 emits 0.5–0.8 alpha
-     and paints labels BEFORE nodes — see liftEdgeLabels for the painter
-     fix). Force fully-opaque background + a stroke halo on the text so
-     even partial overlaps stay readable. */
+  /* Label visibility hardening for BOTH edge labels and subgraph titles.
+     Mermaid 11.14 paints g.clusters / g.edgeLabels BEFORE g.nodes, so
+     anything inside is hidden under nodes when their bounding boxes
+     intersect (e.g. the user's BRIDGE subgraph title spilling into the
+     [OPEN] node area). Combined with _liftLabels() in JS, force a
+     fully-opaque background + a stroke halo on the text so even partial
+     overlaps stay readable. */
   .mermaid-container svg .edgeLabel,
+  .mermaid-container svg .cluster-label,
   .mermaid-container svg .labelBkg { background-color: #ffffff !important; }
   .mermaid-container svg .edgeLabel rect,
-  .mermaid-container svg .edgeLabel foreignObject > div { background-color: #ffffff !important; opacity: 1 !important; }
+  .mermaid-container svg .edgeLabel foreignObject > div,
+  .mermaid-container svg .cluster-label rect,
+  .mermaid-container svg .cluster-label foreignObject > div { background-color: #ffffff !important; opacity: 1 !important; }
   .mermaid-container svg .edgeLabel text,
-  .mermaid-container svg .edgeLabel span { paint-order: stroke; stroke: #ffffff; stroke-width: 3px; }
+  .mermaid-container svg .edgeLabel span,
+  .mermaid-container svg .cluster-label text,
+  .mermaid-container svg .cluster-label span { paint-order: stroke; stroke: #ffffff; stroke-width: 3px; }
   body.dark .mermaid-container svg .edgeLabel,
+  body.dark .mermaid-container svg .cluster-label,
   body.dark .mermaid-container svg .labelBkg { background-color: #1e1e1e !important; }
   body.dark .mermaid-container svg .edgeLabel rect,
-  body.dark .mermaid-container svg .edgeLabel foreignObject > div { background-color: #1e1e1e !important; opacity: 1 !important; }
+  body.dark .mermaid-container svg .edgeLabel foreignObject > div,
+  body.dark .mermaid-container svg .cluster-label rect,
+  body.dark .mermaid-container svg .cluster-label foreignObject > div { background-color: #1e1e1e !important; opacity: 1 !important; }
   body.dark .mermaid-container svg .edgeLabel text,
-  body.dark .mermaid-container svg .edgeLabel span { paint-order: stroke; stroke: #1e1e1e; stroke-width: 3px; }
+  body.dark .mermaid-container svg .edgeLabel span,
+  body.dark .mermaid-container svg .cluster-label text,
+  body.dark .mermaid-container svg .cluster-label span { paint-order: stroke; stroke: #1e1e1e; stroke-width: 3px; }
   .mermaid-error { padding: 8px 12px; border-radius: 4px; font-size: 0.85em; margin: 0.5em 0; }
   #ctx-menu { display:none; position:fixed; z-index:9999; min-width:180px; padding:4px 0; background:#fff; border:1px solid #d0d7de; border-radius:6px; box-shadow:0 4px 16px rgba(0,0,0,0.12); font-size:13px; }
   body.dark #ctx-menu { background:#2d2d2d; border-color:#444; }
@@ -279,20 +292,28 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       });
     }
 
-    // Lift every <g.edgeLabels> to be the LAST sibling under its parent.
-    // Mermaid's default DOM order paints nodes/clusters over labels, so we
-    // walk *all* edgeLabels groups (including those nested inside
-    // <g.cluster>, which is what made labels disappear behind subgraph
-    // boundaries in the user's RE flowchart). Re-appending each one to
-    // its existing parent puts it at the end → drawn last → on top.
-    function _liftEdgeLabels(root) {
+    // Lift every label group to be the LAST sibling under its parent so
+    // it paints on top of nodes / clusters. Mermaid 11.14 emits both
+    //   <g class="edgeLabels"> ... </g>  (edge captions like "hard gap")
+    //   <g class="cluster-label"> ... </g>  (subgraph titles like the user's
+    //                                       "BRIDGE -- Src to ring buffer …")
+    // and places them BEFORE g.nodes, so their content disappears under
+    // any overlapping node. Walking both selectors and re-appending each
+    // group to its existing parent makes them paint last (= on top),
+    // which combined with the opaque-background CSS keeps the text
+    // readable even when bounding boxes intersect.
+    function _liftLabels(root) {
       if (!root) return;
-      var labels = root.querySelectorAll ? root.querySelectorAll('g.edgeLabels') : [];
-      for (var i = 0; i < labels.length; i++) {
-        var p = labels[i].parentNode;
-        if (p) p.appendChild(labels[i]);
+      var groups = root.querySelectorAll
+        ? root.querySelectorAll('g.edgeLabels, g.cluster-label')
+        : [];
+      for (var i = 0; i < groups.length; i++) {
+        var p = groups[i].parentNode;
+        if (p) p.appendChild(groups[i]);
       }
     }
+    // Backwards-compatible alias — earlier passes called _liftEdgeLabels.
+    var _liftEdgeLabels = _liftLabels;
 
     // Inject (or refresh) the ⛶ expand button on a mermaid container.
     function _addExpandBtn(container) {
@@ -339,39 +360,47 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     // pushed this block past MSVC's 16380-char literal limit.
     html += LR"P1c(
     // ===== Phase 1 Auto-correction: overlap detection + spacing fix =====
-    // Walk the rendered SVG inside one container, return the list of edge
-    // labels whose AABB intersects any node AABB. We use viewport-relative
-    // getBoundingClientRect so transforms / nested clusters compose
-    // correctly without manual coordinate math.
+    // Walk the rendered SVG inside one container, return the list of label
+    // bounding boxes that intersect any node AABB. Both edge labels (e.g.
+    // "hard gap") and subgraph titles (e.g. "BRIDGE -- Src to ring buffer …")
+    // are tracked; they require different auto-fix strategies (spacing vs
+    // title-wrap), so each hit carries a `kind` discriminator.
+    //
+    // We use viewport-relative getBoundingClientRect so transforms /
+    // nested clusters compose correctly without manual coordinate math.
     function _detectOverlaps(container) {
       var svg = container && container.querySelector ? container.querySelector('svg') : null;
       if (!svg) return [];
       var nodes = svg.querySelectorAll('g.node');
-      var labels = svg.querySelectorAll('g.edgeLabels g.label');
-      if (!nodes.length || !labels.length) return [];
+      var edgeLabels = svg.querySelectorAll('g.edgeLabels g.label');
+      var clusterLabels = svg.querySelectorAll('g.cluster-label');
+      if (!nodes.length || (!edgeLabels.length && !clusterLabels.length)) return [];
       var nodeBoxes = [];
       for (var i = 0; i < nodes.length; i++) {
         var nb = nodes[i].getBoundingClientRect();
         if (nb.width > 0 && nb.height > 0) nodeBoxes.push(nb);
       }
       var hits = [];
-      for (var j = 0; j < labels.length; j++) {
-        var L = labels[j];
-        var txt = (L.textContent || '').trim();
-        if (!txt) continue;
-        var lb = L.getBoundingClientRect();
-        if (lb.width <= 0 || lb.height <= 0) continue;
-        for (var k = 0; k < nodeBoxes.length; k++) {
-          var nb2 = nodeBoxes[k];
-          var ovX = Math.max(0, Math.min(nb2.right, lb.right) - Math.max(nb2.left, lb.left));
-          var ovY = Math.max(0, Math.min(nb2.bottom, lb.bottom) - Math.max(nb2.top, lb.top));
-          // > 9 px² to ignore single-pixel touch when CSS rounding bites.
-          if (ovX * ovY > 9) {
-            hits.push({ label: L, text: txt });
-            break; // one hit per label is enough for the user-facing count
+      function probe(els, kind) {
+        for (var j = 0; j < els.length; j++) {
+          var L = els[j];
+          var txt = (L.textContent || '').trim();
+          if (!txt) continue;
+          var lb = L.getBoundingClientRect();
+          if (lb.width <= 0 || lb.height <= 0) continue;
+          for (var k = 0; k < nodeBoxes.length; k++) {
+            var nb2 = nodeBoxes[k];
+            var ovX = Math.max(0, Math.min(nb2.right, lb.right) - Math.max(nb2.left, lb.left));
+            var ovY = Math.max(0, Math.min(nb2.bottom, lb.bottom) - Math.max(nb2.top, lb.top));
+            if (ovX * ovY > 9) {
+              hits.push({ label: L, text: txt, kind: kind });
+              break;
+            }
           }
         }
       }
+      probe(edgeLabels, 'edge');
+      probe(clusterLabels, 'cluster');
       return hits;
     }
 
@@ -420,11 +449,13 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       t._tid = setTimeout(function(){ container.classList.remove('mp-show-toast'); }, 2400);
     }
 
-    // Take the block's source (from data-mermaid-src), prepend / merge a
-    // %%{init: {flowchart:{nodeSpacing,rankSpacing}}}%% directive that
-    // gives mermaid more layout breathing room, validate via mermaid.parse,
-    // and post the result back to C++. The user can undo via Ctrl+Z in
-    // EmEditor; we never silently mutate.
+    // Take the block's source (from data-mermaid-src), apply whichever
+    // transformations the current overlaps suggest:
+    //   - any edge-label overlap        → bump rank/node spacing directive
+    //   - any cluster-label overlap     → wrap long subgraph titles with <br/>
+    // Validate the rewritten source via mermaid.parse, and post the result
+    // back to C++. The user can undo via Ctrl+Z in EmEditor; we never
+    // silently mutate.
     async function _applyAutoFix(container) {
       var blockId = container.getAttribute('data-mermaid-id');
       var rawSrc = container.getAttribute('data-mermaid-src');
@@ -433,9 +464,24 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       try { src = decodeURIComponent(rawSrc); }
       catch(_) { _showToast(container, 'Cannot decode source', true); return; }
 
-      var newSrc = _injectSpacingDirective(src);
-      if (newSrc === src) {
-        _showToast(container, 'Already at maximum spacing — try shorter labels', true);
+      var hits = _detectOverlaps(container);
+      var hasCluster = hits.some(function(h){ return h.kind === 'cluster'; });
+      var hasEdge    = hits.some(function(h){ return h.kind === 'edge'; });
+      if (!hits.length) { _showToast(container, 'No overlap to fix', false); return; }
+
+      var newSrc = src;
+      var didSomething = false;
+
+      if (hasCluster) {
+        var wrapped = _wrapLongSubgraphTitles(newSrc);
+        if (wrapped !== newSrc) { newSrc = wrapped; didSomething = true; }
+      }
+      if (hasEdge || (hasCluster && !didSomething)) {
+        var spaced = _injectSpacingDirective(newSrc);
+        if (spaced !== newSrc) { newSrc = spaced; didSomething = true; }
+      }
+      if (!didSomething) {
+        _showToast(container, 'Already at maximum — try shorter labels manually', true);
         return;
       }
 
@@ -453,7 +499,10 @@ std::wstring WebView2Manager::BuildHtmlPage() const
           blockId: blockId,
           newSource: newSrc
         });
-        _showToast(container, 'Spacing increased — markdown updated', false);
+        var what = hasCluster && hasEdge ? 'Title wrapped + spacing increased'
+                 : hasCluster            ? 'Subgraph title wrapped'
+                                         : 'Spacing increased';
+        _showToast(container, what + ' — markdown updated', false);
       }
     }
 
@@ -491,6 +540,34 @@ std::wstring WebView2Manager::BuildHtmlPage() const
       return lines.join('\n');
     }
 )P1c";
+
+    // Continue Part 1c in a fresh raw string — adding the cluster-title
+    // wrapper pushed past MSVC's 16380-char string-literal limit.
+    html += LR"P1d(
+    // Walk every `subgraph X["title"]` line and insert <br/> at whitespace
+    // boundaries when the title is wide enough to overflow the cluster's
+    // header strip. Already-wrapped titles (containing <br>) are left
+    // alone — assume the user already chose their split points.
+    function _wrapLongSubgraphTitles(src) {
+      var rx = /^(\s*subgraph\s+\S+\s*\[\s*")([^"]+)("\s*\])\s*$/gm;
+      return src.replace(rx, function(whole, head, title, tail) {
+        if (/<br\s*\/?>/i.test(title)) return whole;
+        if (title.length <= 28) return whole;
+        // Split into roughly-equal halves at the nearest whitespace to mid.
+        var mid = Math.floor(title.length / 2);
+        var lo = title.lastIndexOf(' ', mid);
+        var hi = title.indexOf(' ', mid);
+        var pivot = -1;
+        if (lo !== -1 && hi !== -1) pivot = (mid - lo) <= (hi - mid) ? lo : hi;
+        else if (lo !== -1) pivot = lo;
+        else if (hi !== -1) pivot = hi;
+        if (pivot === -1) return whole; // no whitespace to break on
+        var left = title.substring(0, pivot).replace(/\s+$/, '');
+        var right = title.substring(pivot + 1).replace(/^\s+/, '');
+        return head + left + '<br/>' + right + tail;
+      });
+    }
+)P1d";
 
     // Continue Part 1b in a fresh raw string — Phase 1 pushed the JS block
     // past MSVC's 16380-char string-literal limit.
