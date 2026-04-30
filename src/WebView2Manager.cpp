@@ -102,7 +102,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     // and avoid raw-string delimiter conflicts with JS code.
 
     // --- Part 1: CSS ---
-    std::wstring html = LR"P1(<!-- MermaidPreview-build-2026-04-30-P1.7 -->
+    std::wstring html = LR"P1(<!-- MermaidPreview-build-2026-04-30-wv2-3912 -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -185,12 +185,13 @@ std::wstring WebView2Manager::BuildHtmlPage() const
   .mermaid-container svg .cluster-label rect,
   .mermaid-container svg .cluster-label foreignObject > div { background-color: #ffffff !important; opacity: 1 !important; }
   /* Mermaid clamps cluster-label foreignObjects with `white-space: nowrap`
-     + `max-width: 200px`, which truncates "BRIDGE -- Src to ring buffer
-     to snapshot" into "snap…". Keep nowrap (the user wants the title on
-     a single line) but lift the max-width cap and let the foreignObject
-     overflow visibly. The actual `<foreignObject width=…>` attribute also
-     clips the inner div in WebView2, so _growClusterLabels() (JS) widens
-     it post-render to match the natural text width. */
+     + `max-width: 200px`, which truncates long subgraph titles. Keep
+     nowrap (titles render best on a single line) but lift the max-width
+     cap and let the foreignObject overflow visibly. WebView2 prior to
+     SDK 1.0.3912 also clipped at the `<foreignObject width=…>` attribute
+     even with CSS overflow:visible — that quirk is fixed in the current
+     SDK so the JS-side off-screen measurement workaround is no longer
+     needed; `width: max-content` alone is enough. */
   .mermaid-container svg .cluster-label foreignObject > div { white-space: nowrap !important; max-width: none !important; width: max-content !important; }
   .mermaid-container svg .cluster-label foreignObject { overflow: visible !important; }
   .mermaid-container svg .edgeLabel text,
@@ -320,72 +321,9 @@ std::wstring WebView2Manager::BuildHtmlPage() const
         var p = groups[i].parentNode;
         if (p) p.appendChild(groups[i]);
       }
-      _growClusterLabels(root);
     }
     // Backwards-compatible alias — earlier passes called _liftEdgeLabels.
     var _liftEdgeLabels = _liftLabels;
-
-    // Cluster-title sizing is tricky in WebView2: a foreignObject's `width`
-    // SVG attribute clips its content even when CSS overflow:visible is
-    // set, AND mermaid's pre-computed widths are based on its nowrap +
-    // 200 px max-width assumption. We measure the title's *natural* width
-    // in a detached off-screen div (no SVG / foreignObject clipping at
-    // all), then size the foreignObject AND the inner div to fit.
-    function _growClusterLabels(root) {
-      if (!root || !root.querySelectorAll) return;
-      var fos = root.querySelectorAll('g.cluster-label foreignObject');
-      if (!fos.length) return;
-
-      // Build a stylistic clone in a hidden div appended to <body>. This
-      // dodges every SVG-side clipping rule because it's pure HTML layout.
-      // PERF-002: batch — every probe is appended before any offsetWidth
-      // read, so the browser only forces layout once per render instead
-      // of once per cluster (was the per-iteration alternation between
-      // appendChild + offsetWidth that triggered K reflows).
-      var measurer = document.createElement('div');
-      measurer.setAttribute('aria-hidden', 'true');
-      measurer.style.cssText = [
-        'position:fixed', 'left:-99999px', 'top:-99999px',
-        'visibility:hidden', 'white-space:nowrap',
-        'font-family:inherit', 'font-size:inherit'
-      ].join(';');
-      var probes = [];
-      for (var i = 0; i < fos.length; i++) {
-        var fo = fos[i];
-        var inner = fo.querySelector('div');
-        if (!inner) { probes.push(null); continue; }
-        var probe = document.createElement('div');
-        probe.style.cssText = 'display:inline-block;white-space:nowrap;';
-        // Keep innerHTML so font-weight / nested span styling participates
-        // in the measurement — using textContent would under-measure bold
-        // titles and re-clip them. mermaid 11 strict-mode sanitizes its
-        // own output, so the SVG-derived markup is already safe.
-        probe.innerHTML = inner.innerHTML;
-        measurer.appendChild(probe);
-        probes.push({ fo: fo, inner: inner, probe: probe });
-      }
-      document.body.appendChild(measurer);
-      try {
-        // Single forced reflow for the whole measurer; subsequent reads in
-        // this loop hit cached layout.
-        for (var j = 0; j < probes.length; j++) {
-          var p = probes[j];
-          if (!p) continue;
-          var w = Math.ceil(p.probe.offsetWidth || p.probe.scrollWidth || 0);
-          var h = Math.ceil(p.probe.offsetHeight || p.probe.scrollHeight || 0);
-          if (w > 0) {
-            p.fo.setAttribute('width', String(w + 12));
-            p.inner.style.width    = (w + 12) + 'px';
-            p.inner.style.maxWidth = 'none';
-            p.inner.style.whiteSpace = 'nowrap';
-          }
-          if (h > 0) p.fo.setAttribute('height', String(h + 4));
-        }
-      } catch (_) { /* swallow — keep render alive */ }
-      finally {
-        if (measurer.parentNode) measurer.parentNode.removeChild(measurer);
-      }
-    }
 
     // Inject (or refresh) the ⛶ expand button on a mermaid container.
     function _addExpandBtn(container) {
