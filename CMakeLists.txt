@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(FetchContent)
 FetchContent_Declare(
     webview2
-    URL https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.2903.40
+    URL https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.3912.50
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(webview2)
