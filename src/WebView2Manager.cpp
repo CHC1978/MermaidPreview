@@ -102,7 +102,7 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     // and avoid raw-string delimiter conflicts with JS code.
 
     // --- Part 1: CSS ---
-    std::wstring html = LR"P1(<!-- MermaidPreview-v14 -->
+    std::wstring html = LR"P1(<!-- MermaidPreview-build-2026-04-30-P1.7 -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -325,32 +325,52 @@ std::wstring WebView2Manager::BuildHtmlPage() const
     // Backwards-compatible alias — earlier passes called _liftEdgeLabels.
     var _liftEdgeLabels = _liftLabels;
 
-    // Mermaid sets a fixed `width` attribute on every <foreignObject> at
-    // render time, computed under its 200-px nowrap assumption. With our
-    // CSS that lifts max-width, the inner <div> wants to be wider than
-    // the foreignObject — and a foreignObject's `width` attribute clips
-    // its content in WebView2 even when overflow:visible is set. Fix:
-    // measure each cluster-label's natural content width and write that
-    // back to the SVG attribute so the title is no longer cut.
+    // Cluster-title sizing is tricky in WebView2: a foreignObject's `width`
+    // SVG attribute clips its content even when CSS overflow:visible is
+    // set, AND mermaid's pre-computed widths are based on its nowrap +
+    // 200 px max-width assumption. We measure the title's *natural* width
+    // in a detached off-screen div (no SVG / foreignObject clipping at
+    // all), then size the foreignObject AND the inner div to fit.
     function _growClusterLabels(root) {
       if (!root || !root.querySelectorAll) return;
       var fos = root.querySelectorAll('g.cluster-label foreignObject');
       if (!fos.length) return;
-      // Two-pass: temporarily relax foreignObject so the div can lay out
-      // at its natural width, then read scrollWidth and pin it.
-      for (var i = 0; i < fos.length; i++) {
-        fos[i].setAttribute('data-mp-orig-w', fos[i].getAttribute('width') || '');
-        fos[i].setAttribute('width', '99999');
-      }
-      // Force a layout flush so the divs reflect the new bounds.
-      for (var j = 0; j < fos.length; j++) {
-        var fo = fos[j];
-        var div = fo.querySelector('div');
-        if (!div) { fo.setAttribute('width', fo.getAttribute('data-mp-orig-w') || ''); continue; }
-        var w = Math.ceil(div.scrollWidth || div.offsetWidth || 0);
-        var h = Math.ceil(div.scrollHeight || div.offsetHeight || 0);
-        if (w > 0) fo.setAttribute('width', String(w + 8));
-        if (h > 0) fo.setAttribute('height', String(h + 2));
+
+      // Build a stylistic clone in a hidden div appended to <body>. This
+      // dodges every SVG-side clipping rule because it's pure HTML layout.
+      var measurer = document.createElement('div');
+      measurer.setAttribute('aria-hidden', 'true');
+      measurer.style.cssText = [
+        'position:fixed', 'left:-99999px', 'top:-99999px',
+        'visibility:hidden', 'white-space:nowrap',
+        'font-family:inherit', 'font-size:inherit'
+      ].join(';');
+      document.body.appendChild(measurer);
+      try {
+        for (var i = 0; i < fos.length; i++) {
+          var fo = fos[i];
+          var inner = fo.querySelector('div');
+          if (!inner) continue;
+          measurer.innerHTML = '';
+          // Clone children so any text-styling spans come along, but
+          // wrap them in a fresh container that has no inherited width.
+          var probe = document.createElement('div');
+          probe.style.cssText = 'display:inline-block;white-space:nowrap;';
+          probe.innerHTML = inner.innerHTML;
+          measurer.appendChild(probe);
+          var w = Math.ceil(probe.offsetWidth || probe.scrollWidth || 0);
+          var h = Math.ceil(probe.offsetHeight || probe.scrollHeight || 0);
+          if (w > 0) {
+            fo.setAttribute('width', String(w + 12));
+            inner.style.width    = (w + 12) + 'px';
+            inner.style.maxWidth = 'none';
+            inner.style.whiteSpace = 'nowrap';
+          }
+          if (h > 0) fo.setAttribute('height', String(h + 4));
+        }
+      } catch (_) { /* swallow — keep render alive */ }
+      finally {
+        if (measurer.parentNode) measurer.parentNode.removeChild(measurer);
       }
     }
 
