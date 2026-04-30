@@ -184,13 +184,14 @@ std::wstring WebView2Manager::BuildHtmlPage() const
   .mermaid-container svg .edgeLabel foreignObject > div,
   .mermaid-container svg .cluster-label rect,
   .mermaid-container svg .cluster-label foreignObject > div { background-color: #ffffff !important; opacity: 1 !important; }
-  /* Mermaid sets `white-space: nowrap` + a 200 px max-width on cluster-label
-     foreignObjects; that's what truncated the user's "BRIDGE -- Src to ring
-     buffer to snapshot" into "snap…" with a CSS ellipsis. Allow the title
-     to wrap onto multiple lines so it stays inside the cluster header
-     strip without an ellipsis. Edge labels keep their default behaviour
-     (they're positioned per-edge and benefit from staying single-line). */
-  .mermaid-container svg .cluster-label foreignObject > div { white-space: normal !important; max-width: none !important; }
+  /* Mermaid clamps cluster-label foreignObjects with `white-space: nowrap`
+     + `max-width: 200px`, which truncates "BRIDGE -- Src to ring buffer
+     to snapshot" into "snap…". Keep nowrap (the user wants the title on
+     a single line) but lift the max-width cap and let the foreignObject
+     overflow visibly. The actual `<foreignObject width=…>` attribute also
+     clips the inner div in WebView2, so _growClusterLabels() (JS) widens
+     it post-render to match the natural text width. */
+  .mermaid-container svg .cluster-label foreignObject > div { white-space: nowrap !important; max-width: none !important; width: max-content !important; }
   .mermaid-container svg .cluster-label foreignObject { overflow: visible !important; }
   .mermaid-container svg .edgeLabel text,
   .mermaid-container svg .edgeLabel span,
@@ -319,9 +320,39 @@ std::wstring WebView2Manager::BuildHtmlPage() const
         var p = groups[i].parentNode;
         if (p) p.appendChild(groups[i]);
       }
+      _growClusterLabels(root);
     }
     // Backwards-compatible alias — earlier passes called _liftEdgeLabels.
     var _liftEdgeLabels = _liftLabels;
+
+    // Mermaid sets a fixed `width` attribute on every <foreignObject> at
+    // render time, computed under its 200-px nowrap assumption. With our
+    // CSS that lifts max-width, the inner <div> wants to be wider than
+    // the foreignObject — and a foreignObject's `width` attribute clips
+    // its content in WebView2 even when overflow:visible is set. Fix:
+    // measure each cluster-label's natural content width and write that
+    // back to the SVG attribute so the title is no longer cut.
+    function _growClusterLabels(root) {
+      if (!root || !root.querySelectorAll) return;
+      var fos = root.querySelectorAll('g.cluster-label foreignObject');
+      if (!fos.length) return;
+      // Two-pass: temporarily relax foreignObject so the div can lay out
+      // at its natural width, then read scrollWidth and pin it.
+      for (var i = 0; i < fos.length; i++) {
+        fos[i].setAttribute('data-mp-orig-w', fos[i].getAttribute('width') || '');
+        fos[i].setAttribute('width', '99999');
+      }
+      // Force a layout flush so the divs reflect the new bounds.
+      for (var j = 0; j < fos.length; j++) {
+        var fo = fos[j];
+        var div = fo.querySelector('div');
+        if (!div) { fo.setAttribute('width', fo.getAttribute('data-mp-orig-w') || ''); continue; }
+        var w = Math.ceil(div.scrollWidth || div.offsetWidth || 0);
+        var h = Math.ceil(div.scrollHeight || div.offsetHeight || 0);
+        if (w > 0) fo.setAttribute('width', String(w + 8));
+        if (h > 0) fo.setAttribute('height', String(h + 2));
+      }
+    }
 
     // Inject (or refresh) the ⛶ expand button on a mermaid container.
     function _addExpandBtn(container) {
