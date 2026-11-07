@@ -45,7 +45,9 @@ body.view-item[class*="collection-type-blog"] .blog-item-category-wrapper:last-c
 body.view-item[class*="collection-type-blog"] .blog-item-meta-wrapper { gap: 14px; margin-bottom: 12px; }
 body.view-item[class*="collection-type-blog"] #page { background: #FBF8F1; }
 body.view-item[class*="collection-type-blog"] .blog-item-wrapper,
-body.view-item[class*="collection-type-blog"] article.entry { max-width: 1080px !important; margin-left: auto !important; margin-right: auto !important; }
+body.view-item[class*="collection-type-blog"] article.entry { max-width: 1128px !important; margin-left: auto !important; margin-right: auto !important; box-sizing: border-box !important; }
+body.view-item[class*="collection-type-blog"] article.entry { max-width: none !important; padding-left: 0 !important; padding-right: 0 !important; }
+body.view-item[class*="collection-type-blog"] .blog-item-inner-wrapper { width: 100% !important; max-width: none !important; margin-left: 0 !important; margin-right: 0 !important; }
 body.view-item[class*="collection-type-blog"] section.blog-item-wrapper, body.view-item[class*="collection-type-blog"] .blog-item-wrapper { padding-left: 24px; padding-right: 24px; }
 .nh-back { display: inline-block; margin: 0 0 24px; font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; font-size: 14px; color: #1A4682 !important; text-decoration: none; }
 .nh-back:hover { text-decoration: underline; text-underline-offset: 4px; }
