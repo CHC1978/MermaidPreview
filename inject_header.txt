@@ -75,7 +75,6 @@ body.view-item[class*="collection-type-blog"] .blog-item-content th, body.view-i
 body.view-item[class*="collection-type-blog"] .blog-item-content thead th { background: #F1E9D6; color: #0F3D6B; }
 body.view-item[class*="collection-type-blog"] .blog-item-content img { border-radius: 4px; }
 body.view-item[class*="collection-type-blog"] .blog-item-content .image-caption p, body.view-item[class*="collection-type-blog"] .blog-item-content figcaption { font-size: 14px !important; color: #4A5B70 !important; }
-body.view-item[class*="collection-type-blog"] .sqs-block:has(.nh-post) { padding-left: 0 !important; padding-right: 0 !important; }
 body.view-item[class*="collection-type-blog"] .blog-item-pagination, body.view-item[class*="collection-type-blog"] .item-pagination { max-width: 1080px; margin: 40px auto 72px !important; padding: 24px 24px 0 !important; border-top: 1px solid #CDBF9E; font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif !important; }
 body.view-item[class*="collection-type-blog"] .item-pagination a, body.view-item[class*="collection-type-blog"] .blog-item-pagination a { color: #1A4682 !important; }
 body.view-item[class*="collection-type-blog"] .item-pagination-title, body.view-item[class*="collection-type-blog"] .pagination-title-wrapper h2 { font-family: 'Noto Serif TC', 'Songti TC', serif !important; font-size: 18px !important; color: #0F3D6B !important; letter-spacing: normal !important; text-transform: none !important; }
