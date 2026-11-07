@@ -34,6 +34,7 @@ html.nh-has-bloglist section.collection-content-wrapper,
 html.nh-has-bloglist .blog-basic-grid, html.nh-has-bloglist .blog-side-by-side-wrapper,
 html.nh-has-bloglist .blog-single-column, html.nh-has-bloglist .blog-alternating-side-by-side-wrapper,
 html.nh-has-bloglist .blog-masonry { display: none !important; }
+html.nh-has-bloglist #sections > section.page-section { display: none !important; }
 
 /* ---- blog post page (native) */
 body[class*="collection-type-blog"] .blog-meta-item--author, body[class*="collection-type-blog"] .blog-author,

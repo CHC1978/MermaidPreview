@@ -68,7 +68,14 @@
     if (document.getElementById('nh-scene')) {
       return '<svg viewBox="806 60 620 430" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%"><use href="#nh-scene"></use></svg>';
     }
-    return '';
+    return '<svg viewBox="0 0 400 290" preserveAspectRatio="xMidYMax slice" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%">' +
+      '<defs><linearGradient id="nhFbSea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4CC3CE"/><stop offset="0.35" stop-color="#2A93AE"/><stop offset="1" stop-color="#135477"/></linearGradient></defs>' +
+      '<rect x="0" y="150" width="400" height="140" fill="url(#nhFbSea)"/>' +
+      '<path d="M0 150 Q 25 145 50 150 T 100 150 T 150 150 T 200 150 T 250 150 T 300 150 T 350 150 T 400 150" fill="none" stroke="#DCEFF6" stroke-width="2" opacity="0.8"/>' +
+      '<path d="M200 156 L 70 262 M200 156 L 120 266 M200 156 L 170 268 M200 156 L 230 268 M200 156 L 280 266 M200 156 L 330 262" stroke="#DCEFF6" stroke-width="1.2" opacity="0.35"/>' +
+      '<path d="M0 258 C 60 250 110 266 170 262 S 280 252 330 260 S 380 266 400 262 L 400 290 L 0 290 Z" fill="#C9B48A"/>' +
+      '<path d="M0 272 C 70 266 140 278 210 274 S 330 268 400 276" fill="none" stroke="#A8915F" stroke-width="1.5"/>' +
+      '<path d="M182 150 L 218 150 L 214 158 L 186 158 Z" fill="#12324F"/></svg>';
   }
   function meta(it, withTime) {
     var c = cats(it).join(' · ');
