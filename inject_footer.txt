@@ -159,7 +159,8 @@
     nav();
     // blog list page: replace the native list with the NeptusHydro list
     var b = document.body.classList;
-    if (b.contains('collection-type-blog') && b.contains('view-list') && !document.querySelector('[data-nh-posts]')) {
+    var isBlog = /(^|\s)collection-type-blog/.test(document.body.className);
+    if (isBlog && b.contains('view-list') && !document.querySelector('[data-nh-posts]')) {
       var tl = document.getElementById('nh-tpl-bloglist');
       var host = document.querySelector('.blog-list-section, section.collection-content-wrapper, #sections') || page;
       if (tl && host) {
@@ -172,7 +173,7 @@
       }
     }
     // post page: back link above the title
-    if (b.contains('collection-type-blog') && b.contains('view-item') && !document.querySelector('.nh-back')) {
+    if (isBlog && b.contains('view-item') && !document.querySelector('.nh-back')) {
       var t = document.querySelector('.blog-item-top-wrapper, .blog-item-title, article .entry-title');
       if (t) {
         var a = document.createElement('a');

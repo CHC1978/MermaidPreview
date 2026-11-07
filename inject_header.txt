@@ -36,42 +36,45 @@ html.nh-has-bloglist .blog-single-column, html.nh-has-bloglist .blog-alternating
 html.nh-has-bloglist .blog-masonry { display: none !important; }
 
 /* ---- blog post page (native) */
-body.view-item.collection-type-blog #page { background: #FBF8F1; }
-body.view-item.collection-type-blog .blog-item-wrapper,
-body.view-item.collection-type-blog article.entry { max-width: 720px !important; margin-left: auto !important; margin-right: auto !important; }
-body.view-item.collection-type-blog section.blog-item-wrapper, body.view-item.collection-type-blog .blog-item-wrapper { padding-left: 24px; padding-right: 24px; }
+body[class*="collection-type-blog"] .blog-meta-item--author, body[class*="collection-type-blog"] .blog-author,
+body[class*="collection-type-blog"] .blog-item-author-profile-wrapper, body[class*="collection-type-blog"] .author-profile { display: none !important; }
+body.view-item[class*="collection-type-blog"] .blog-meta-item--date::before, body.view-item[class*="collection-type-blog"] .blog-meta-item--categories::after { content: none !important; }
+body.view-item[class*="collection-type-blog"] #page { background: #FBF8F1; }
+body.view-item[class*="collection-type-blog"] .blog-item-wrapper,
+body.view-item[class*="collection-type-blog"] article.entry { max-width: 720px !important; margin-left: auto !important; margin-right: auto !important; }
+body.view-item[class*="collection-type-blog"] section.blog-item-wrapper, body.view-item[class*="collection-type-blog"] .blog-item-wrapper { padding-left: 24px; padding-right: 24px; }
 .nh-back { display: inline-block; margin: 0 0 24px; font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; font-size: 14px; color: #1A4682 !important; text-decoration: none; }
 .nh-back:hover { text-decoration: underline; text-underline-offset: 4px; }
-body.view-item.collection-type-blog .blog-item-title h1,
-body.view-item.collection-type-blog h1.entry-title,
-body.view-item.collection-type-blog h1.blog-title { font-family: 'Noto Serif TC', 'Songti TC', serif !important; font-size: 40px !important; line-height: 1.35 !important; font-weight: 700 !important; color: #0F3D6B !important; letter-spacing: normal !important; text-transform: none !important; text-wrap: balance; text-align: left !important; }
-body.view-item.collection-type-blog .blog-meta-section, body.view-item.collection-type-blog .blog-item-meta-wrapper,
-body.view-item.collection-type-blog .blog-meta-item { font-family: 'Noto Sans Mono', ui-monospace, monospace !important; font-size: 14px !important; color: #4A5B70 !important; letter-spacing: normal !important; text-transform: none !important; justify-content: flex-start !important; }
-body.view-item.collection-type-blog .blog-meta-item--categories a, body.view-item.collection-type-blog .blog-categories a { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif !important; color: #0B7068 !important; font-weight: 500 !important; }
-body.view-item.collection-type-blog .blog-item-content,
-body.view-item.collection-type-blog .blog-item-content p,
-body.view-item.collection-type-blog .blog-item-content li { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif !important; font-size: 16px !important; line-height: 1.75 !important; color: #06172E !important; letter-spacing: normal !important; }
-body.view-item.collection-type-blog .blog-item-content h1,
-body.view-item.collection-type-blog .blog-item-content h2 { margin: 48px 0 20px !important; padding-top: 40px; border-top: 1px solid #CDBF9E; font-family: 'Noto Serif TC', 'Songti TC', serif !important; font-size: 30px !important; line-height: 1.35 !important; font-weight: 700 !important; color: #0F3D6B !important; letter-spacing: normal !important; text-transform: none !important; }
-body.view-item.collection-type-blog .blog-item-content h3 { margin: 32px 0 12px !important; font-family: 'Noto Serif TC', 'Songti TC', serif !important; font-size: 22px !important; line-height: 1.45 !important; font-weight: 700 !important; color: #0F3D6B !important; letter-spacing: normal !important; text-transform: none !important; }
-body.view-item.collection-type-blog .blog-item-content h4 { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif !important; font-size: 18px !important; font-weight: 700 !important; color: #06172E !important; letter-spacing: normal !important; text-transform: none !important; }
-body.view-item.collection-type-blog .blog-item-content a { color: #1A4682 !important; text-decoration: underline; text-underline-offset: 3px; }
-body.view-item.collection-type-blog .blog-item-content li::marker { color: #8E5A14; }
-body.view-item.collection-type-blog .blog-item-content blockquote { margin: 24px 0 !important; padding: 4px 0 4px 20px !important; border-left: 3px solid #F2A541; color: #4A5B70 !important; font-style: normal !important; }
-body.view-item.collection-type-blog .blog-item-content code { font-family: 'Noto Sans Mono', ui-monospace, monospace; font-size: 0.92em; background: #F1E9D6; border: 1px solid #CDBF9E; border-radius: 2px; padding: 1px 5px; }
-body.view-item.collection-type-blog .blog-item-content pre { background: #06172E; color: #F1E9D6; border-radius: 4px; padding: 16px 20px; overflow-x: auto; }
-body.view-item.collection-type-blog .blog-item-content pre code { background: none; border: 0; padding: 0; color: inherit; }
-body.view-item.collection-type-blog .blog-item-content table { width: 100%; border-collapse: collapse; font-size: 15px; margin: 8px 0 24px; }
-body.view-item.collection-type-blog .blog-item-content th, body.view-item.collection-type-blog .blog-item-content td { border-top: 1px solid #CDBF9E; padding: 12px 14px; text-align: left; vertical-align: top; }
-body.view-item.collection-type-blog .blog-item-content thead th { background: #F1E9D6; color: #0F3D6B; }
-body.view-item.collection-type-blog .blog-item-content img { border-radius: 4px; }
-body.view-item.collection-type-blog .blog-item-content .image-caption p, body.view-item.collection-type-blog .blog-item-content figcaption { font-size: 14px !important; color: #4A5B70 !important; }
-body.view-item.collection-type-blog .sqs-block:has(.nh-post) { padding-left: 0 !important; padding-right: 0 !important; }
-body.view-item.collection-type-blog .blog-item-pagination, body.view-item.collection-type-blog .item-pagination { max-width: 720px; margin: 40px auto 72px !important; padding: 24px 24px 0 !important; border-top: 1px solid #CDBF9E; font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif !important; }
-body.view-item.collection-type-blog .item-pagination a, body.view-item.collection-type-blog .blog-item-pagination a { color: #1A4682 !important; }
-body.view-item.collection-type-blog .item-pagination-title, body.view-item.collection-type-blog .pagination-title-wrapper h2 { font-family: 'Noto Serif TC', 'Songti TC', serif !important; font-size: 18px !important; color: #0F3D6B !important; letter-spacing: normal !important; text-transform: none !important; }
+body.view-item[class*="collection-type-blog"] .blog-item-title h1,
+body.view-item[class*="collection-type-blog"] h1.entry-title,
+body.view-item[class*="collection-type-blog"] h1.blog-title { font-family: 'Noto Serif TC', 'Songti TC', serif !important; font-size: 40px !important; line-height: 1.35 !important; font-weight: 700 !important; color: #0F3D6B !important; letter-spacing: normal !important; text-transform: none !important; text-wrap: balance; text-align: left !important; }
+body.view-item[class*="collection-type-blog"] .blog-meta-section, body.view-item[class*="collection-type-blog"] .blog-item-meta-wrapper,
+body.view-item[class*="collection-type-blog"] .blog-meta-item { font-family: 'Noto Sans Mono', ui-monospace, monospace !important; font-size: 14px !important; color: #4A5B70 !important; letter-spacing: normal !important; text-transform: none !important; justify-content: flex-start !important; }
+body.view-item[class*="collection-type-blog"] .blog-meta-item--categories a, body.view-item[class*="collection-type-blog"] .blog-categories a { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif !important; color: #0B7068 !important; font-weight: 500 !important; }
+body.view-item[class*="collection-type-blog"] .blog-item-content,
+body.view-item[class*="collection-type-blog"] .blog-item-content p,
+body.view-item[class*="collection-type-blog"] .blog-item-content li { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif !important; font-size: 16px !important; line-height: 1.75 !important; color: #06172E !important; letter-spacing: normal !important; }
+body.view-item[class*="collection-type-blog"] .blog-item-content h1,
+body.view-item[class*="collection-type-blog"] .blog-item-content h2 { margin: 48px 0 20px !important; padding-top: 40px; border-top: 1px solid #CDBF9E; font-family: 'Noto Serif TC', 'Songti TC', serif !important; font-size: 30px !important; line-height: 1.35 !important; font-weight: 700 !important; color: #0F3D6B !important; letter-spacing: normal !important; text-transform: none !important; }
+body.view-item[class*="collection-type-blog"] .blog-item-content h3 { margin: 32px 0 12px !important; font-family: 'Noto Serif TC', 'Songti TC', serif !important; font-size: 22px !important; line-height: 1.45 !important; font-weight: 700 !important; color: #0F3D6B !important; letter-spacing: normal !important; text-transform: none !important; }
+body.view-item[class*="collection-type-blog"] .blog-item-content h4 { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif !important; font-size: 18px !important; font-weight: 700 !important; color: #06172E !important; letter-spacing: normal !important; text-transform: none !important; }
+body.view-item[class*="collection-type-blog"] .blog-item-content a { color: #1A4682 !important; text-decoration: underline; text-underline-offset: 3px; }
+body.view-item[class*="collection-type-blog"] .blog-item-content li::marker { color: #8E5A14; }
+body.view-item[class*="collection-type-blog"] .blog-item-content blockquote { margin: 24px 0 !important; padding: 4px 0 4px 20px !important; border-left: 3px solid #F2A541; color: #4A5B70 !important; font-style: normal !important; }
+body.view-item[class*="collection-type-blog"] .blog-item-content code { font-family: 'Noto Sans Mono', ui-monospace, monospace; font-size: 0.92em; background: #F1E9D6; border: 1px solid #CDBF9E; border-radius: 2px; padding: 1px 5px; }
+body.view-item[class*="collection-type-blog"] .blog-item-content pre { background: #06172E; color: #F1E9D6; border-radius: 4px; padding: 16px 20px; overflow-x: auto; }
+body.view-item[class*="collection-type-blog"] .blog-item-content pre code { background: none; border: 0; padding: 0; color: inherit; }
+body.view-item[class*="collection-type-blog"] .blog-item-content table { width: 100%; border-collapse: collapse; font-size: 15px; margin: 8px 0 24px; }
+body.view-item[class*="collection-type-blog"] .blog-item-content th, body.view-item[class*="collection-type-blog"] .blog-item-content td { border-top: 1px solid #CDBF9E; padding: 12px 14px; text-align: left; vertical-align: top; }
+body.view-item[class*="collection-type-blog"] .blog-item-content thead th { background: #F1E9D6; color: #0F3D6B; }
+body.view-item[class*="collection-type-blog"] .blog-item-content img { border-radius: 4px; }
+body.view-item[class*="collection-type-blog"] .blog-item-content .image-caption p, body.view-item[class*="collection-type-blog"] .blog-item-content figcaption { font-size: 14px !important; color: #4A5B70 !important; }
+body.view-item[class*="collection-type-blog"] .sqs-block:has(.nh-post) { padding-left: 0 !important; padding-right: 0 !important; }
+body.view-item[class*="collection-type-blog"] .blog-item-pagination, body.view-item[class*="collection-type-blog"] .item-pagination { max-width: 720px; margin: 40px auto 72px !important; padding: 24px 24px 0 !important; border-top: 1px solid #CDBF9E; font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif !important; }
+body.view-item[class*="collection-type-blog"] .item-pagination a, body.view-item[class*="collection-type-blog"] .blog-item-pagination a { color: #1A4682 !important; }
+body.view-item[class*="collection-type-blog"] .item-pagination-title, body.view-item[class*="collection-type-blog"] .pagination-title-wrapper h2 { font-family: 'Noto Serif TC', 'Songti TC', serif !important; font-size: 18px !important; color: #0F3D6B !important; letter-spacing: normal !important; text-transform: none !important; }
 @media (max-width: 640px) {
-  body.view-item.collection-type-blog .blog-item-title h1, body.view-item.collection-type-blog h1.entry-title, body.view-item.collection-type-blog h1.blog-title { font-size: 30px !important; }
-  body.view-item.collection-type-blog .blog-item-content h1, body.view-item.collection-type-blog .blog-item-content h2 { font-size: 25px !important; }
+  body.view-item[class*="collection-type-blog"] .blog-item-title h1, body.view-item[class*="collection-type-blog"] h1.entry-title, body.view-item[class*="collection-type-blog"] h1.blog-title { font-size: 30px !important; }
+  body.view-item[class*="collection-type-blog"] .blog-item-content h1, body.view-item[class*="collection-type-blog"] .blog-item-content h2 { font-size: 25px !important; }
 }
 </style>
