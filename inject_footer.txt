@@ -62,7 +62,7 @@
   function minutes(it) { var n = txt(it.body).length; return n ? Math.max(1, Math.round(n / 450)) : 0; }
   function cats(it) { return (it.categories || []).concat([]).filter(Boolean); }
   function thumb(it) {
-    if (it.assetUrl && !/\/static\//.test(it.assetUrl)) {
+    if (it.assetUrl && !/\/$/.test(it.assetUrl) && it.systemDataId) {
       return '<img src="' + esc(it.assetUrl) + '?format=1000w" alt="" loading="lazy" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover">';
     }
     if (document.getElementById('nh-scene')) {
