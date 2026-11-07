@@ -172,6 +172,10 @@
         document.documentElement.classList.add('nh-has-bloglist');
       }
     }
+    // post page: ISO dates like the rest of the site
+    Array.prototype.forEach.call(document.querySelectorAll('time.dt-published[datetime]'), function (t) {
+      var s = t.getAttribute('datetime'); if (/^\d{4}-\d{2}-\d{2}$/.test(s)) t.textContent = s;
+    });
     // post page: back link above the title
     if (isBlog && b.contains('view-item') && !document.querySelector('.nh-back')) {
       var t = document.querySelector('.blog-item-top-wrapper, .blog-item-title, article .entry-title');
