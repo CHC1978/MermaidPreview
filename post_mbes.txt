@@ -1,0 +1,289 @@
+<div class="nh-post" style="font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; font-size: 16px; line-height: 1.7; color: #06172E">
+
+<p style="margin: 0 0 8px; font-size: 18px; line-height: 1.75; color: #4A5B70">每套多音束系統都需要兩種聲速資料：換能器旁的表面聲速，以及整個水柱的聲速剖面（SVP）。資料一樣，但收發換能器是裝在同一個聲納頭裡，還是分成兩支獨立安裝，會讓聲速改正（ray tracing）的起始條件、需要輸入的安裝參數，以及誤差在資料上的樣子都不一樣。這篇不談公式推導，只整理實務上最容易踩到的差異。</p>
+
+<h2 style="margin: 48px 0 20px; padding-top: 40px; border-top: 1px solid #CDBF9E; font-family: 'Noto Serif TC', serif; font-size: 32px; line-height: 1.35; font-weight: 700; color: #0F3D6B">兩種聲速，兩種用途</h2>
+<p style="margin: 0 0 16px"><strong>表面聲速</strong>由裝在換能器附近的聲速探頭即時量測，用在聲納的<strong>波束形成</strong>：平板陣列要把波束轉到某個角度，各陣元之間的時間延遲是用這個聲速換算的。</p>
+<p style="margin: 0 0 16px"><strong>聲速剖面</strong>由 CTD 或 SVP 儀下放取得，用在 <strong>ray tracing</strong>：聲波穿過不同聲速的水層時會折射，必須沿著剖面一層一層追蹤，才能把「旅行時間 + 角度」換算成正確的水深與橫向位置。</p>
+<p style="margin: 0">表面聲速決定波束往哪個方向出發，剖面決定聲線怎麼彎。而波束從哪裡出發、往哪個方向出發，取決於收發換能器怎麼裝。</p>
+
+<h2 style="margin: 48px 0 20px; padding-top: 40px; border-top: 1px solid #CDBF9E; font-family: 'Noto Serif TC', serif; font-size: 32px; line-height: 1.35; font-weight: 700; color: #0F3D6B">一體式與分體式：差在哪裡</h2>
+<p style="margin: 0 0 16px"><strong>一體式安裝</strong>：TX、RX 封裝在同一個聲納頭內（常見為 RX 在前、TX 在後），彼此的幾何關係出廠就固定，韌體並定義了單一的 sonar reference point，輸出的旅行時間與角度都以這個點為準。安裝時只需輸入一組 lever arm 與一組安裝角，使用者無法、也不需要把 TX 與 RX 分開處理。這類系統常見於中淺水、小型船或可攜式安裝。</p>
+<p style="margin: 0 0 16px"><strong>分體式安裝</strong>：TX 與 RX 是兩個獨立的換能器，以 Mills cross 配置分別固定在船底，各有自己的 lever arm 與安裝角，必須分別量測、分別輸入。中深水系統的陣列動輒數公尺長，幾乎都是分體式；淺水系統也有分體式設計。</p>
+<figure style="margin: 8px 0 32px; background: #F1E9D6; border: 1px solid #CDBF9E; border-radius: 4px; padding: 24px">
+<svg viewBox="0 0 720 400" role="img" aria-label="船底仰視圖比較。上：一體式聲納頭，TX 與 RX 在同一殼體內，由韌體定義單一 sonar reference point，只需一組 lever arm。下：分體式系統的 TX 與 RX 是分開安裝的兩個換能器，各自有 lever arm 與安裝角。" style="width: 100%; height: auto; display: block; font-family: 'Noto Sans TC', sans-serif">
+<rect x="512" y="12" width="16" height="10" fill="#1A4682"></rect>
+<text x="534" y="21" font-size="12" fill="#4A5B70">TX 發射陣</text>
+<rect x="610" y="12" width="16" height="10" fill="#8E5A14"></rect>
+<text x="632" y="21" font-size="12" fill="#4A5B70">RX 接收陣</text>
+<text x="20" y="24" font-size="14" font-weight="600" fill="#06172E">一體式安裝：TX、RX 在同一聲納頭</text>
+<text x="20" y="42" font-size="12" fill="#4A5B70">船底仰視圖，聲納頭放大示意</text>
+<path d="M120 60 L470 60 Q545 68 575 105 Q545 142 470 150 L120 150 Z" fill="#FBF8F1" stroke="#4A5B70" stroke-width="1.5"></path>
+<line x1="120" y1="105" x2="575" y2="105" stroke="#6E7F91" stroke-width="1" stroke-dasharray="6 4"></line>
+<text x="112" y="110" text-anchor="end" font-size="13" font-weight="600" fill="#06172E">船艉</text>
+<text x="584" y="110" font-size="13" font-weight="600" fill="#06172E">船艏</text>
+<path d="M616 105 L650 105 M643 99 L650 105 L643 111" fill="none" stroke="#0F3D6B" stroke-width="1.5"></path>
+<circle cx="280" cy="105" r="7" fill="#FBF8F1" stroke="#0F3D6B" stroke-width="1.5"></circle>
+<path d="M273 105 L287 105 M280 98 L280 112" stroke="#0F3D6B" stroke-width="1.2"></path>
+<text x="280" y="134" text-anchor="middle" font-size="12" fill="#06172E">CRP</text>
+<rect x="398" y="68" width="86" height="74" rx="8" fill="#FBF8F1" stroke="#0F3D6B" stroke-width="1.5"></rect>
+<rect x="406" y="98" width="62" height="14" rx="2" fill="#1A4682"></rect>
+<rect x="462" y="74" width="14" height="62" rx="2" fill="#8E5A14"></rect>
+<text x="432" y="90" text-anchor="middle" font-size="10" font-weight="600" fill="#1A4682">TX 在後</text>
+<text x="488" y="84" font-size="10" font-weight="600" fill="#8E5A14">RX 在前</text>
+<circle cx="469" cy="105" r="6" fill="#FBF8F1" stroke="#0F3D6B" stroke-width="1.5"></circle>
+<path d="M463 105 L475 105 M469 99 L469 111" stroke="#0F3D6B" stroke-width="1.2"></path>
+<path d="M288 101 Q 380 76 462 100" fill="none" stroke="#0F3D6B" stroke-width="1.5" stroke-dasharray="5 3"></path>
+<path d="M455.4 94 L462 100 L453.2 101.6" fill="none" stroke="#0F3D6B" stroke-width="1.5"></path>
+<text x="372" y="79" text-anchor="middle" font-size="11" fill="#06172E">1 組 lever arm</text>
+<path d="M469 142 L469 166" stroke="#0F3D6B" stroke-width="1"></path>
+<text x="440" y="182" text-anchor="middle" font-size="12" fill="#06172E">Sonar Reference Point：韌體定義，TX / RX 幾何固定</text>
+<line x1="20" y1="202" x2="700" y2="202" stroke="#CDBF9E" stroke-width="1"></line>
+<text x="20" y="230" font-size="14" font-weight="600" fill="#06172E">分體式安裝：TX、RX 為兩個獨立換能器</text>
+<text x="20" y="248" font-size="12" fill="#4A5B70">船底仰視圖，Mills cross 配置，TX 與 RX 分別安裝</text>
+<path d="M90 266 L500 266 Q590 276 625 312 Q590 348 500 358 L90 358 Z" fill="#FBF8F1" stroke="#4A5B70" stroke-width="1.5"></path>
+<line x1="90" y1="312" x2="625" y2="312" stroke="#6E7F91" stroke-width="1" stroke-dasharray="6 4"></line>
+<text x="82" y="317" text-anchor="end" font-size="13" font-weight="600" fill="#06172E">船艉</text>
+<text x="634" y="317" font-size="13" font-weight="600" fill="#06172E">船艏</text>
+<path d="M666 312 L700 312 M693 306 L700 312 L693 318" fill="none" stroke="#0F3D6B" stroke-width="1.5"></path>
+<circle cx="230" cy="312" r="7" fill="#FBF8F1" stroke="#0F3D6B" stroke-width="1.5"></circle>
+<path d="M223 312 L237 312 M230 305 L230 319" stroke="#0F3D6B" stroke-width="1.2"></path>
+<text x="230" y="341" text-anchor="middle" font-size="12" fill="#06172E">CRP</text>
+<rect x="420" y="276" width="14" height="72" rx="2" fill="#8E5A14"></rect>
+<rect x="446" y="305" width="110" height="14" rx="2" fill="#1A4682"></rect>
+<path d="M237 306 Q 330 280 420 302" fill="none" stroke="#0F3D6B" stroke-width="1.5" stroke-dasharray="5 3"></path>
+<path d="M413.2 296.2 L420 302 L411.3 304" fill="none" stroke="#0F3D6B" stroke-width="1.5"></path>
+<text x="322" y="283" text-anchor="middle" font-size="11" fill="#06172E">RX lever arm + 安裝角</text>
+<path d="M237 318 Q 370 350 494 320" fill="none" stroke="#0F3D6B" stroke-width="1.5" stroke-dasharray="5 3"></path>
+<path d="M485.3 318 L494 320 L487.1 325.8" fill="none" stroke="#0F3D6B" stroke-width="1.5"></path>
+<text x="352" y="353" text-anchor="middle" font-size="11" fill="#06172E">TX lever arm + 安裝角</text>
+<circle cx="427" cy="312" r="6" fill="#FBF8F1" stroke="#0F3D6B" stroke-width="1.5"></circle>
+<path d="M421 312 L433 312 M427 306 L427 318" stroke="#0F3D6B" stroke-width="1.2"></path>
+<circle cx="501" cy="312" r="6" fill="#FBF8F1" stroke="#0F3D6B" stroke-width="1.5"></circle>
+<path d="M495 312 L507 312 M501 306 L501 318" stroke="#0F3D6B" stroke-width="1.2"></path>
+<text x="360" y="388" text-anchor="middle" font-size="12" fill="#06172E">TX、RX 各有參考點與安裝參數，需分別量測、分別輸入</text>
+</svg>
+<figcaption style="margin-top: 16px; font-size: 14px; color: #4A5B70; line-height: 1.7"><span style="color: #8E5A14; font-weight: 700">圖 1</span>　船底仰視圖。上：一體式安裝，RX 在前、TX 在後，封裝在同一殼體內，幾何由原廠固定，韌體以單一 sonar reference point 輸出資料，安裝時只需一組 lever arm 與安裝角。下：分體式安裝，TX、RX 是兩個獨立換能器，各自有位置與角度。</figcaption>
+</figure>
+<p style="margin: 0">兩者在聲速改正上的差異，主要來自三件事：參考點是一個還是兩個、發射波束有沒有導向，以及發射與接收之間的時間差能不能忽略。</p>
+
+<h2 style="margin: 48px 0 20px; padding-top: 40px; border-top: 1px solid #CDBF9E; font-family: 'Noto Serif TC', serif; font-size: 32px; line-height: 1.35; font-weight: 700; color: #0F3D6B">差異的根源：ray tracing 的起始向量</h2>
+<p style="margin: 0 0 16px">Ray tracing 要從一個起始方向出發：這個波束在水中的入射角與方位角，也就是「波束向量」。聲速剖面再準，起始向量算錯，後面整條聲線都會跟著錯。一體式與分體式真正的分歧，就在這個起始向量怎麼算。</p>
+<p style="margin: 0 0 16px"><strong>一體式</strong>：收發共用同一個參考點，典型配置也不做發射導向，波束向量只需要接收導向角、姿態與安裝角，共 7 個角度，學界稱為「收發同體模型」。</p>
+<p style="margin: 0 0 16px"><strong>分體式</strong>：為了補償縱搖與首搖，發射波束常依當下姿態做電子導向，並把一個 ping 拆成多個扇區、各扇區導向角不同（依水深模式而定，以 Kongsberg Discovery MBES 為例，常見 3 到 8 個扇區）。再加上 TX、RX 位置不同，從發射到接收之間船已移動、姿態也變了（圖 2），波束實際上是「發射圓錐面」與「接收圓錐面」的交線，必須同時考慮兩個時刻、兩支陣列的角度與位置。</p>
+<figure style="margin: 8px 0 32px; background: #F1E9D6; border: 1px solid #CDBF9E; border-radius: 4px; padding: 24px">
+<svg viewBox="0 0 720 410" role="img" aria-label="沿航向側視圖。發射時刻船艏上仰，分體式系統的發射陣以導向把波束拉回垂直；聲波到海底反射後，船已前進，由新位置的接收陣接收，發射與接收聲線不重疊。" style="width: 100%; height: auto; display: block; font-family: 'Noto Sans TC', sans-serif">
+<rect x="20" y="110" width="680" height="270" fill="#DDEDEE"></rect>
+<line x1="20" y1="110" x2="700" y2="110" stroke="#6E7F91" stroke-width="1.5"></line>
+<rect x="20" y="380" width="680" height="22" fill="#CDBF9E"></rect>
+<line x1="20" y1="380" x2="700" y2="380" stroke="#8C7A5B" stroke-width="1.5"></line>
+<text x="610" y="22" text-anchor="middle" font-size="12" fill="#4A5B70">航行方向</text>
+<path d="M560 32 L660 32 M652 26 L660 32 L652 38" fill="none" stroke="#0F3D6B" stroke-width="1.5"></path>
+<text x="150" y="22" text-anchor="middle" font-size="13" font-weight="600" fill="#06172E">t₀ 發射時刻：船艏上仰</text>
+<text x="350" y="22" text-anchor="middle" font-size="13" font-weight="600" fill="#4A5B70">t₁ 接收時刻：船已前進</text>
+<g transform="translate(150 0) rotate(2 190 100)" fill="none" stroke="#4A5B70" stroke-width="1.2" stroke-dasharray="5 3">
+<path d="M60 80 L320 76 L290 118 L75 118 L60 104 Z"></path>
+<rect x="130" y="50" width="80" height="28"></rect>
+<path d="M66 80 L76 54 L86 80"></path>
+<line x1="170" y1="50" x2="170" y2="36"></line>
+<rect x="215" y="118" width="50" height="8"></rect>
+</g>
+<g transform="translate(150 0) rotate(2 190 100)"><rect x="164" y="118" width="12" height="10" fill="#8E5A14"></rect></g>
+<text x="478" y="86" font-size="13" font-weight="600" fill="#06172E">船艏</text>
+<g transform="rotate(-8 190 100)">
+<path d="M60 80 L320 76 L290 118 L75 118 L60 104 Z" fill="#FBF8F1" stroke="#4A5B70" stroke-width="1.5"></path>
+<rect x="130" y="50" width="80" height="28" fill="#FBF8F1" stroke="#4A5B70" stroke-width="1.2"></rect>
+<rect x="174" y="56" width="12" height="8" fill="#0F3D6B"></rect>
+<rect x="192" y="56" width="12" height="8" fill="#0F3D6B"></rect>
+<path d="M66 80 L76 54 L86 80" fill="none" stroke="#4A5B70" stroke-width="2"></path>
+<line x1="170" y1="50" x2="170" y2="36" stroke="#4A5B70" stroke-width="2"></line>
+<rect x="215" y="118" width="50" height="8" fill="#1A4682"></rect>
+<rect x="164" y="118" width="12" height="10" fill="#6E7F91"></rect>
+</g>
+<text x="50" y="98" text-anchor="end" font-size="13" font-weight="600" fill="#06172E">船艉</text>
+<polygon points="243,115 231,380 255,380" fill="#1A4682" fill-opacity="0.15"></polygon>
+<line x1="243" y1="115" x2="243" y2="380" stroke="#1A4682" stroke-width="2.5"></line>
+<line x1="243" y1="115" x2="280" y2="380" stroke="#1A4682" stroke-width="1.5" stroke-dasharray="6 4"></line>
+<path d="M243 175 A60 60 0 0 0 251.4 174.4" fill="none" stroke="#1A4682" stroke-width="1.5"></path>
+<text x="256" y="192" font-size="12" fill="#1A4682">θtx</text>
+<text x="236" y="240" text-anchor="end" font-size="12" fill="#1A4682">發射導向：補償縱搖，</text>
+<text x="236" y="256" text-anchor="end" font-size="12" fill="#1A4682">把波束拉回垂直</text>
+<path d="M276 376 L284 384 M284 376 L276 384" stroke="#1A4682" stroke-width="1.5"></path>
+<text x="290" y="372" font-size="11" fill="#1A4682">未導向（垂直船底）的落點</text>
+<line x1="243" y1="380" x2="319" y2="122" stroke="#8E5A14" stroke-width="2.5" stroke-dasharray="7 4"></line>
+<text x="306" y="232" font-size="12" fill="#8E5A14">回波由 t₁ 的 RX 接收</text>
+<circle cx="243" cy="380" r="5" fill="#0F3D6B"></circle>
+<text x="234" y="397" text-anchor="end" font-size="11" fill="#06172E">波束腳印</text>
+<rect x="490" y="176" width="210" height="150" rx="8" fill="#FBF8F1" stroke="#CDBF9E"></rect>
+<text x="504" y="202" font-size="12" fill="#1A4682">① t₀：TX 依當下姿態導向發射</text>
+<text x="504" y="226" font-size="12" fill="#4A5B70">② 聲波到海底後反射</text>
+<text x="504" y="250" font-size="12" fill="#8E5A14">③ t₁：RX 在新位置、新姿態接收</text>
+<text x="504" y="282" font-size="12" font-weight="600" fill="#06172E">發射、接收聲線不重疊</text>
+<text x="504" y="304" font-size="12" font-weight="600" fill="#06172E">需用 VCCA / NCCA 計算</text>
+</svg>
+<figcaption style="margin-top: 16px; font-size: 14px; color: #4A5B70; line-height: 1.7"><span style="color: #8E5A14; font-weight: 700">圖 2</span>　沿航向側視圖（角度與距離誇大示意）。發射時船艏上仰，分體式系統的 TX 以導向把波束拉回垂直；回波返回時船已前進，由新位置的 RX 接收，兩條聲線不再重疊。</figcaption>
+</figure>
+<p style="margin: 0 0 16px">針對這個問題，加拿大 OMG 團隊發展了<strong>虛擬同心模型（VCCA）</strong>，考慮 14 個角度；後來 Travis 等人（2014）再加入收發陣列之間的位置偏移與船行偏移，成為<strong>收發分置模型（NCCA）</strong>。</p>
+<figure style="margin: 8px 0 32px; background: #F1E9D6; border: 1px solid #CDBF9E; border-radius: 4px; padding: 24px">
+<svg viewBox="0 0 720 320" role="img" aria-label="海底俯視圖：三個發射扇區因導向角不同，在海底形成三條不同的曲線，與接收曲線交於不同位置；簡化模型則把所有點放在船正橫方向的同一條線上" style="width: 100%; height: auto; display: block; font-family: 'Noto Sans TC', sans-serif">
+<rect x="20" y="10" width="680" height="280" fill="#FBF8F1" rx="6"></rect>
+<path d="M40 60 Q 360 160 680 60" fill="none" stroke="#1A4682" stroke-width="2.5"></path>
+<line x1="40" y1="150" x2="680" y2="150" stroke="#1A4682" stroke-width="2.5"></line>
+<path d="M40 240 Q 360 140 680 240" fill="none" stroke="#1A4682" stroke-width="2.5"></path>
+<text x="48" y="52" font-size="12" fill="#1A4682">扇區 1：前導 +θtx</text>
+<text x="48" y="142" font-size="12" fill="#1A4682">扇區 2：0°</text>
+<text x="48" y="262" font-size="12" fill="#1A4682">扇區 3：後導 −θtx</text>
+<path d="M500 20 Q 545 150 500 280" fill="none" stroke="#8E5A14" stroke-width="2.5"></path>
+<text x="548" y="30" font-size="12" fill="#8E5A14">接收曲線（θrx 固定）</text>
+<path d="M360 120 Q372 130 372 146 L372 180 L348 180 L348 146 Q348 130 360 120 Z" fill="#FBF8F1" stroke="#0F3D6B" stroke-width="1.5"></path>
+<rect x="352" y="152" width="16" height="12" fill="#FBF8F1" stroke="#0F3D6B" stroke-width="1"></rect>
+<text x="378" y="130" font-size="11" font-weight="600" fill="#06172E">船艏</text>
+<text x="378" y="182" font-size="11" font-weight="600" fill="#06172E">船艉</text>
+<path d="M300 50 L300 26 M294 32 L300 26 L306 32" fill="none" stroke="#0F3D6B" stroke-width="1.5"></path>
+<text x="308" y="40" font-size="11" fill="#4A5B70">航向</text>
+<circle cx="519" cy="98" r="6" fill="#0F3D6B"></circle>
+<circle cx="522" cy="150" r="6" fill="#FBF8F1" stroke="#0F3D6B" stroke-width="2"></circle>
+<circle cx="519" cy="202" r="6" fill="#0F3D6B"></circle>
+<path d="M522 142 L520 108" stroke="#0F3D6B" stroke-width="1.2" stroke-dasharray="3 3" fill="none"></path>
+<path d="M522 158 L520 194" stroke="#0F3D6B" stroke-width="1.2" stroke-dasharray="3 3" fill="none"></path>
+<text x="580" y="154" font-size="12" fill="#06172E">○ 簡化模型的位置</text>
+<text x="580" y="94" font-size="12" fill="#06172E">● 實際波束腳印</text>
+<text x="580" y="206" font-size="12" fill="#06172E">● 實際波束腳印</text>
+<text x="360" y="310" text-anchor="middle" font-size="12" fill="#4A5B70">俯視海底：發射曲線與接收曲線的交點才是真正的測深點</text>
+</svg>
+<figcaption style="margin-top: 16px; font-size: 14px; color: #4A5B70; line-height: 1.7"><span style="color: #8E5A14; font-weight: 700">圖 3</span>　海底俯視圖（分體式、多扇區發射）。同一個接收角，在不同扇區會落在不同位置。若忽略發射導向，所有點都被算到船正橫方向的同一條線上；水越深、導向角越大，偏差越大。</figcaption>
+</figure>
+<p style="margin: 0 0 16px">如果把分體式的資料用簡化的收發同體模型處理，會差多少？一份比較這幾種模型的研究簡報給了很直接的數字：</p>
+<ul style="margin: 0 0 16px; padding-left: 22px; display: flex; flex-direction: column; gap: 8px">
+<li>淺水（18–28 m）：與 VCCA 相比，水深最大差約 0.34 m，約 0.2% 的點超過 1% 水深限差。影響不大，但海況變差時會增加。</li>
+<li>深水（約 800–1060 m）：平面位置差最大約 44 m，約 37% 的點超過 1% 水深限差，簡化模型基本上不能用。</li>
+</ul>
+<p style="margin: 0 0 16px">同一份研究也指出，這些模型都把波束能量當成規則圓錐面，<strong>忽略了聲速變化對圓錐面本身的折射扭曲</strong>，在全海深環境下仍有系統誤差。換句話說，波束向量與聲速改正其實是綁在一起的問題。</p>
+<p style="margin: 0">另外要注意：「一體式不做發射導向」只是典型情況。部分一體式機型有發射導向選配，啟用時波束向量要把發射導向角也算進去；不過收發仍共用同一個參考點，不會有分體式的收發分置問題。</p>
+
+<h2 style="margin: 48px 0 20px; padding-top: 40px; border-top: 1px solid #CDBF9E; font-family: 'Noto Serif TC', serif; font-size: 32px; line-height: 1.35; font-weight: 700; color: #0F3D6B">表面聲速差一點，外側波束差多少？</h2>
+<p style="margin: 0 0 16px">以平板陣列為例，假設實際表面聲速是 1503 m/s，探頭卻讀到 1500 m/s（誤差 0.2%）。波束形成時以為轉到 60°，實際指向約 60.2°。</p>
+<p style="margin: 0 0 16px">在水深 50 m、斜距約 100 m 的外側波束，這 0.2° 會造成約 <strong>0.3 m 的深度誤差</strong>，而且左右對稱、越往外越大。在成果上看到的就是典型的「微笑」或「哭臉」剖面。</p>
+<p style="margin: 0 0 16px">這一點兩種安裝方式都一樣，但分體式多了一層：TX 的發射導向角也是用表面聲速換算的，表面聲速錯了，沿航向的導向同樣會偏。部分機型採用弧形接收陣列，波束方向主要由陣列幾何決定，對表面聲速誤差較不敏感。</p>
+<p style="margin: 0">這種誤差常被誤判成 roll 校正問題，但 roll 誤差是一邊高一邊低，聲速誤差是兩邊同時往上或往下彎，形狀不同。</p>
+
+<h2 style="margin: 48px 0 20px; padding-top: 40px; border-top: 1px solid #CDBF9E; font-family: 'Noto Serif TC', serif; font-size: 32px; line-height: 1.35; font-weight: 700; color: #0F3D6B">分體式：TX、RX 位置與安裝角不準的影響</h2>
+<p style="margin: 0 0 16px">分體式系統在做 ray tracing 之前，要先用 TX、RX 各自的 lever arm 與安裝角算出兩件事：波束的起始方向（入射角與方位角），以及聲線從哪個深度開始追蹤。許多系統在處理單元內即時完成這個計算，結果直接寫進原始檔的測深資料中。</p>
+<p style="margin: 0 0 16px">換句話說，安裝參數的誤差<strong>在聲速改正之前就進入計算</strong>，不是事後疊加的小改正量。在等聲速的水裡，角度誤差只會讓條帶整體旋轉；但只要剖面有梯度，起始角錯一點，依 Snell 定律追出來的聲線就會沿途偏離，外側波束偏得更多。所以發現安裝角有誤時，不能把 XYZ 轉個角度了事，必須修正參數後，從原始 range／angle 重新計算。</p>
+<p style="margin: 0 0 16px">依 Mills cross 的幾何，<strong>RX 陣列決定跨航向角度，TX 陣列決定沿航向角度</strong>，所以各項誤差影響的方向不同。下表以水深 50 m、60° 外側波束（斜距約 100 m）估算，未計入折射放大：</p>
+<div style="overflow-x: auto; border: 1px solid #CDBF9E; border-radius: 4px; background: #FBF8F1; margin: 0 0 28px">
+<table style="width: 100%; min-width: 680px; border-collapse: collapse; font-size: 15px; line-height: 1.6">
+<thead>
+<tr style="background: #0F3D6B; color: #F1E9D6; text-align: left">
+<th scope="col" style="padding: 14px 16px; font-weight: 500">誤差來源</th>
+<th scope="col" style="padding: 14px 16px; font-weight: 500">範例</th>
+<th scope="col" style="padding: 14px 16px; font-weight: 500">外側波束的影響</th>
+<th scope="col" style="padding: 14px 16px; font-weight: 500">在資料上的樣子</th>
+</tr>
+</thead>
+<tbody>
+<tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">RX roll 安裝角</th><td style="padding: 14px 16px">0.1°</td><td style="padding: 14px 16px">水深差約 ±0.15 m，左右相反</td><td style="padding: 14px 16px">條帶一邊高、一邊低</td></tr>
+<tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">TX pitch 安裝角</th><td style="padding: 14px 16px">0.5°</td><td style="padding: 14px 16px">沿航向位移：正下方約 0.44 m、外側約 0.87 m；水深幾乎不變</td><td style="padding: 14px 16px">往返測線上，地物前後錯開</td></tr>
+<tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">TX／RX 相對 heading</th><td style="padding: 14px 16px">0.5°</td><td style="padding: 14px 16px">外側沿航向位移約 0.76 m，左右相反</td><td style="padding: 14px 16px">條帶相對航向歪斜，扇區交界錯位</td></tr>
+<tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">TX／RX 相對位置</th><td style="padding: 14px 16px">沿航向量錯</td><td style="padding: 14px 16px">依導向角與水深而定；淺水、大導向角時影響水深</td><td style="padding: 14px 16px">扇區交界出現階差</td></tr>
+<tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">垂直 lever arm（Z）</th><td style="padding: 14px 16px">0.10 m</td><td style="padding: 14px 16px">全條帶水深偏 0.10 m，聲線起始深度也跟著偏</td><td style="padding: 14px 16px">與其他船、潮位基準不符</td></tr>
+<tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">水平 lever arm × 姿態</th><td style="padding: 14px 16px">沿航向錯 1 m、縱搖 3°</td><td style="padding: 14px 16px">誘發升沉誤差約 0.05 m，隨縱搖起伏</td><td style="padding: 14px 16px">海底出現與船運動同步的波紋</td></tr>
+</tbody>
+</table>
+</div>
+<figure style="margin: 8px 0 32px; background: #F1E9D6; border: 1px solid #CDBF9E; border-radius: 4px; padding: 24px">
+<svg viewBox="0 0 720 472" role="img" aria-label="四種誤差在資料上的樣子：RX roll 誤差使條帶一邊高一邊低；聲速誤差使條帶左右對稱彎曲；TX pitch 誤差使條帶在俯視上前移且外側移更多；TX 與 RX 相對 heading 誤差使條帶相對航向歪斜。" style="width: 100%; height: auto; display: block; font-family: 'Noto Sans TC', sans-serif">
+<rect x="20" y="20" width="335" height="200" rx="6" fill="#FBF8F1"></rect>
+<text x="36" y="46" font-size="13" font-weight="600" fill="#8E5A14">① RX roll 安裝角誤差</text>
+<text x="36" y="64" font-size="12" fill="#4A5B70">跨航向剖面：一邊高、一邊低</text>
+<path d="M187 88 L50 150 M187 88 L325 190" stroke="#9FB1C6" stroke-width="1"></path>
+<line x1="50" y1="170" x2="325" y2="170" stroke="#6E7F91" stroke-width="1.5" stroke-dasharray="6 4"></line>
+<line x1="50" y1="150" x2="325" y2="190" stroke="#0F3D6B" stroke-width="2.5"></line>
+<rect x="179" y="80" width="16" height="8" rx="1.5" fill="#0F3D6B"></rect>
+<text x="52" y="141" font-size="11" fill="#06172E">偏淺</text>
+<text x="300" y="208" font-size="11" fill="#06172E">偏深</text>
+<rect x="365" y="20" width="335" height="200" rx="6" fill="#FBF8F1"></rect>
+<text x="381" y="46" font-size="13" font-weight="600" fill="#06172E">② 聲速誤差（對照）</text>
+<text x="381" y="64" font-size="12" fill="#4A5B70">跨航向剖面：左右對稱彎曲</text>
+<path d="M532 88 L395 145 M532 88 L670 145" stroke="#9FB1C6" stroke-width="1"></path>
+<line x1="395" y1="170" x2="670" y2="170" stroke="#6E7F91" stroke-width="1.5" stroke-dasharray="6 4"></line>
+<path d="M395 145 Q 532.5 195 670 145" fill="none" stroke="#0F3D6B" stroke-width="2.5"></path>
+<rect x="524" y="80" width="16" height="8" rx="1.5" fill="#0F3D6B"></rect>
+<text x="532" y="208" text-anchor="middle" font-size="11" fill="#06172E">兩側同時上翹或下彎</text>
+<rect x="20" y="240" width="335" height="200" rx="6" fill="#FBF8F1"></rect>
+<text x="36" y="266" font-size="13" font-weight="600" fill="#1A4682">③ TX pitch 安裝角誤差</text>
+<text x="36" y="284" font-size="12" fill="#4A5B70">海底俯視：條帶前移，外側移更多</text>
+<line x1="45" y1="400" x2="330" y2="400" stroke="#6E7F91" stroke-width="1.5" stroke-dasharray="6 4"></line>
+<path d="M45 345 Q 187.5 395 330 345" fill="none" stroke="#0F3D6B" stroke-width="2.5"></path>
+<path d="M300 396 L300 360 M295 366 L300 360 L305 366" fill="none" stroke="#1A4682" stroke-width="1.5"></path>
+<text x="306" y="384" font-size="11" fill="#1A4682">前移</text>
+<path d="M187 380 Q195 388 195 398 L195 420 L179 420 L179 398 Q179 388 187 380 Z" fill="#FBF8F1" stroke="#0F3D6B" stroke-width="1.2"></path>
+<text x="200" y="390" font-size="10" fill="#06172E">船艏</text>
+<rect x="365" y="240" width="335" height="200" rx="6" fill="#FBF8F1"></rect>
+<text x="381" y="266" font-size="13" font-weight="600" fill="#06172E">④ TX／RX 相對 heading 誤差</text>
+<text x="381" y="284" font-size="12" fill="#4A5B70">海底俯視：條帶相對航向歪斜</text>
+<line x1="390" y1="400" x2="675" y2="400" stroke="#6E7F91" stroke-width="1.5" stroke-dasharray="6 4"></line>
+<line x1="390" y1="375" x2="675" y2="425" stroke="#0F3D6B" stroke-width="2.5"></line>
+<path d="M400 396 L400 382 M395 388 L400 382 L405 388" fill="none" stroke="#0F3D6B" stroke-width="1.5"></path>
+<text x="408" y="372" font-size="11" fill="#06172E">前移</text>
+<path d="M665 404 L665 418 M660 412 L665 418 L670 412" fill="none" stroke="#0F3D6B" stroke-width="1.5"></path>
+<text x="657" y="434" text-anchor="end" font-size="11" fill="#06172E">後移</text>
+<path d="M532 380 Q540 388 540 398 L540 420 L524 420 L524 398 Q524 388 532 380 Z" fill="#FBF8F1" stroke="#0F3D6B" stroke-width="1.2"></path>
+<text x="545" y="390" font-size="10" fill="#06172E">船艏</text>
+<path d="M30 458 L62 458" stroke="#6E7F91" stroke-width="1.5" stroke-dasharray="6 4"></path>
+<text x="70" y="462" font-size="12" fill="#4A5B70">實際海底／正確位置</text>
+<path d="M230 458 L262 458" stroke="#0F3D6B" stroke-width="2.5"></path>
+<text x="270" y="462" font-size="12" fill="#4A5B70">量測結果</text>
+<text x="700" y="462" text-anchor="end" font-size="12" fill="#4A5B70">誤差量誇大示意</text>
+</svg>
+<figcaption style="margin-top: 16px; font-size: 14px; color: #4A5B70; line-height: 1.7"><span style="color: #8E5A14; font-weight: 700">圖 4</span>　安裝參數誤差與聲速誤差在資料上的不同樣子。①②為跨航向剖面，③④為海底俯視。RX 誤差表現在跨航向，TX 誤差表現在沿航向。</figcaption>
+</figure>
+<p style="margin: 0 0 16px">三個實務重點：</p>
+<ul style="margin: 0 0 16px; padding-left: 22px; display: flex; flex-direction: column; gap: 10px">
+<li><strong>Patch test 的結果要放進對的地方。</strong>一體式只有一組安裝角，校正值直接改在這一組即可。分體式的 TX 與 RX 已依既定的安裝位置與角度固定在同一個安裝 frame 上，兩者的相對幾何不變；patch test 求得的 roll、pitch、heading 偏差，應視為整個安裝 frame 的偏差，一起套用到兩支陣列。若拆開只改其中一支，會破壞原本的相對幾何，校正值在不同扇區、不同導向角下就不會一致。</li>
+<li><strong>TX、RX 的相對位置要量準。</strong>收發分置模型靠這段距離把兩個圓錐面交在正確的位置。相對位置錯了，在淺水、大導向角時最明顯，常表現為扇區交界的階差；水深增加後影響迅速變小。</li>
+<li><strong>改了參數，要從原始資料重算。</strong>即時寫進檔案的 XYZ 已經用了舊參數，應在後處理時覆寫安裝參數，從原始 range／angle 重新 ray tracing。不過當時波束實際打到海底哪裡已經固定，重算只能修正點被放到哪裡，無法改變覆蓋範圍。</li>
+</ul>
+<p style="margin: 0">判斷順序可以這樣走：左右對稱彎曲，先查聲速；一邊高一邊低，查 roll；地物在往返測線間前後錯開，查 pitch 與時間延遲（pitch 誤差隨水深變大，latency 隨船速變大）；分體式若出現外側沿航向錯開、扇區交界錯位，再查 TX／RX 的相對 heading 與相對位置。</p>
+
+<h2 style="margin: 48px 0 20px; padding-top: 40px; border-top: 1px solid #CDBF9E; font-family: 'Noto Serif TC', serif; font-size: 32px; line-height: 1.35; font-weight: 700; color: #0F3D6B">一張表看差異</h2>
+<div style="overflow-x: auto; border: 1px solid #CDBF9E; border-radius: 4px; background: #FBF8F1">
+<table style="width: 100%; min-width: 620px; border-collapse: collapse; font-size: 15px; line-height: 1.6">
+<thead>
+<tr style="background: #0F3D6B; color: #F1E9D6; text-align: left">
+<th scope="col" style="padding: 14px 16px; font-weight: 500">項目</th>
+<th scope="col" style="padding: 14px 16px; font-weight: 500">一體式安裝</th>
+<th scope="col" style="padding: 14px 16px; font-weight: 500">分體式安裝</th>
+</tr>
+</thead>
+<tbody>
+<tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">收發換能器</th><td style="padding: 14px 16px">同一殼體，幾何由原廠固定</td><td style="padding: 14px 16px">兩個獨立換能器，各自安裝</td></tr>
+<tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">參考點</th><td style="padding: 14px 16px">韌體定義單一 sonar reference point</td><td style="padding: 14px 16px">TX、RX 各自的參考點</td></tr>
+<tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">安裝參數</th><td style="padding: 14px 16px">一組 lever arm＋一組安裝角</td><td style="padding: 14px 16px">兩組 lever arm＋兩組安裝角</td></tr>
+<tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">發射導向</th><td style="padding: 14px 16px">典型無；部分機型有選配</td><td style="padding: 14px 16px">常見，依姿態分扇區導向</td></tr>
+<tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">波束向量模型</th><td style="padding: 14px 16px">收發同體模型（7 個角度）</td><td style="padding: 14px 16px">VCCA／NCCA（TX、RX 分開計算）</td></tr>
+<tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">表面聲速錯誤</th><td style="padding: 14px 16px">平板陣列影響波束角；弧形陣列較不敏感</td><td style="padding: 14px 16px">RX 波束角與 TX 導向角同時受影響</td></tr>
+<tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">Patch test 結果</th><td style="padding: 14px 16px">改在同一組安裝角</td><td style="padding: 14px 16px">整個安裝 frame 視為一體，同一組角度套用到 TX 與 RX</td></tr>
+<tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">常見情境</th><td style="padding: 14px 16px">中淺水、小型船、可攜式安裝</td><td style="padding: 14px 16px">中深水、大型船、固定船殼安裝</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 style="margin: 48px 0 20px; padding-top: 40px; border-top: 1px solid #CDBF9E; font-family: 'Noto Serif TC', serif; font-size: 32px; line-height: 1.35; font-weight: 700; color: #0F3D6B">現場檢查清單</h2>
+<ul style="margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px">
+<li><strong>一體式</strong>：依原廠文件確認聲納頭參考點的位置，lever arm 量到這個點；安裝角只有一組，不要自行拆成 TX、RX。</li>
+<li><strong>分體式</strong>：TX、RX 分別量測 lever arm 與安裝角，特別注意兩支陣列之間的相對位置與相對方位。</li>
+<li><strong>所有系統</strong>：確認表面聲速探頭的讀值有送進聲納；探頭與剖面表層差異明顯時，就是該重新下放 SVP 的訊號。</li>
+<li><strong>後處理</strong>：看到左右對稱的外側彎曲，先查聲速，再查 roll。分體式資料重處理時，軟體必須讀取各扇區的發射導向角與發射時刻姿態；自行寫程式時，不要套用只看接收角的簡化模型，深水尤其如此。</li>
+</ul>
+
+<h2 style="margin: 48px 0 20px; padding-top: 40px; border-top: 1px solid #CDBF9E; font-family: 'Noto Serif TC', serif; font-size: 32px; line-height: 1.35; font-weight: 700; color: #0F3D6B">結語</h2>
+<p style="margin: 0">一體式把收發幾何封裝在聲納頭裡，安裝參數少、模型簡單，適合機動的中淺水作業。分體式換來更大的陣列與更完整的姿態補償，但 TX、RX 各自的位置與角度、發射導向，以及收發之間的時間差，都必須正確進入聲速改正的計算。了解自己的系統屬於哪一種，才能在資料出問題時，知道要回頭檢查哪一段。</p>
+
+<p style="margin: 40px 0 0; font-size: 14px; line-height: 1.7; color: #4A5B70">參考：Clarke (2000)；Beaudoin et al. (2004)；Travis et al. (2014)；多波束波束歸位模型比較之研討會簡報。</p>
+
+<div style="margin-top: 56px; padding-top: 24px; border-top: 1px solid #CDBF9E; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; font-size: 14px">
+<span style="color: #4A5B70">NeptusHydro · 有不同的現場經驗？歡迎來信 <a href="mailto:admin@neptus-hyd.com">admin@neptus-hyd.com</a></span>
+<a href="/blog">← 回到文章列表</a>
+</div>
+</div>

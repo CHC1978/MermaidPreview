@@ -86,7 +86,7 @@
 <h2 style="margin: 48px 0 20px; padding-top: 40px; border-top: 1px solid #CDBF9E; font-family: 'Noto Serif TC', serif; font-size: 32px; line-height: 1.35; font-weight: 700; color: #0F3D6B">差異的根源：ray tracing 的起始向量</h2>
 <p style="margin: 0 0 16px">Ray tracing 要從一個起始方向出發：這個波束在水中的入射角與方位角，也就是「波束向量」。聲速剖面再準，起始向量算錯，後面整條聲線都會跟著錯。一體式與分體式真正的分歧，就在這個起始向量怎麼算。</p>
 <p style="margin: 0 0 16px"><strong>一體式</strong>：收發共用同一個參考點，典型配置也不做發射導向，波束向量只需要接收導向角、姿態與安裝角，共 7 個角度，學界稱為「收發同體模型」。</p>
-<p style="margin: 0 0 16px"><strong>分體式</strong>：為了補償縱搖與首搖，發射波束常依當下姿態做電子導向，並把一個 ping 拆成多個扇區、各扇區導向角不同（依水深模式，常見 4 到 9 個扇區）。再加上 TX、RX 位置不同，從發射到接收之間船已移動、姿態也變了（圖 2），波束實際上是「發射圓錐面」與「接收圓錐面」的交線，必須同時考慮兩個時刻、兩支陣列的角度與位置。</p>
+<p style="margin: 0 0 16px"><strong>分體式</strong>：為了補償縱搖與首搖，發射波束常依當下姿態做電子導向，並把一個 ping 拆成多個扇區、各扇區導向角不同（依水深模式而定，以 Kongsberg Discovery MBES 為例，常見 3 到 8 個扇區）。再加上 TX、RX 位置不同，從發射到接收之間船已移動、姿態也變了（圖 2），波束實際上是「發射圓錐面」與「接收圓錐面」的交線，必須同時考慮兩個時刻、兩支陣列的角度與位置。</p>
 <figure style="margin: 8px 0 32px; background: #F1E9D6; border: 1px solid #CDBF9E; border-radius: 4px; padding: 24px">
 <svg viewBox="0 0 720 410" role="img" aria-label="沿航向側視圖。發射時刻船艏上仰，分體式系統的發射陣以導向把波束拉回垂直；聲波到海底反射後，船已前進，由新位置的接收陣接收，發射與接收聲線不重疊。" style="width: 100%; height: auto; display: block; font-family: 'Noto Sans TC', sans-serif">
 <rect x="20" y="110" width="680" height="270" fill="#DDEDEE"></rect>
@@ -256,7 +256,7 @@
 </figure>
 <p style="margin: 0 0 16px">三個實務重點：</p>
 <ul style="margin: 0 0 16px; padding-left: 22px; display: flex; flex-direction: column; gap: 10px">
-<li><strong>Patch test 的結果要放進對的地方。</strong>一體式只有一組安裝角，校正值直接改在這一組即可。分體式則要分開：roll 偏差反映跨航向角度，主要屬於 RX；pitch 偏差反映沿航向角度，主要屬於 TX；heading 則是兩支陣列一起轉。全部改在同一支陣列，或只改姿態感測器的偏差，校正值在不同扇區、不同導向角下就不會一致。</li>
+<li><strong>Patch test 的結果要放進對的地方。</strong>一體式只有一組安裝角，校正值直接改在這一組即可。分體式的 TX 與 RX 已依既定的安裝位置與角度固定在同一個安裝 frame 上，兩者的相對幾何不變；patch test 求得的 roll、pitch、heading 偏差，應視為整個安裝 frame 的偏差，一起套用到兩支陣列。若拆開只改其中一支，會破壞原本的相對幾何，校正值在不同扇區、不同導向角下就不會一致。</li>
 <li><strong>TX、RX 的相對位置要量準。</strong>收發分置模型靠這段距離把兩個圓錐面交在正確的位置。相對位置錯了，在淺水、大導向角時最明顯，常表現為扇區交界的階差；水深增加後影響迅速變小。</li>
 <li><strong>改了參數，要從原始資料重算。</strong>即時寫進檔案的 XYZ 已經用了舊參數，應在後處理時覆寫安裝參數，從原始 range／angle 重新 ray tracing。不過當時波束實際打到海底哪裡已經固定，重算只能修正點被放到哪裡，無法改變覆蓋範圍。</li>
 </ul>
@@ -279,7 +279,7 @@
 <tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">發射導向</th><td style="padding: 14px 16px">典型無；部分機型有選配</td><td style="padding: 14px 16px">常見，依姿態分扇區導向</td></tr>
 <tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">波束向量模型</th><td style="padding: 14px 16px">收發同體模型（7 個角度）</td><td style="padding: 14px 16px">VCCA／NCCA（TX、RX 分開計算）</td></tr>
 <tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">表面聲速錯誤</th><td style="padding: 14px 16px">平板陣列影響波束角；弧形陣列較不敏感</td><td style="padding: 14px 16px">RX 波束角與 TX 導向角同時受影響</td></tr>
-<tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">Patch test 結果</th><td style="padding: 14px 16px">改在同一組安裝角</td><td style="padding: 14px 16px">roll 歸 RX、pitch 歸 TX、heading 兩支都改</td></tr>
+<tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">Patch test 結果</th><td style="padding: 14px 16px">改在同一組安裝角</td><td style="padding: 14px 16px">整個安裝 frame 視為一體，同一組角度套用到 TX 與 RX</td></tr>
 <tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">常見情境</th><td style="padding: 14px 16px">中淺水、小型船、可攜式安裝</td><td style="padding: 14px 16px">中深水、大型船、固定船殼安裝</td></tr>
 </tbody>
 </table>

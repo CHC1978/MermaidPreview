@@ -1,0 +1,189 @@
+<template id="nh-tpl-header">
+<header class="nh-chrome nh-chrome-header" data-theme="dark" style="background: #06172E">
+<div style="max-width: 1080px; margin: 0 auto; padding: 16px 24px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 32px">
+<a href="/" aria-label="NeptusHydro 首頁" style="display: block; line-height: 0"><span class="nh-logo" aria-hidden="true" style="display: block; width: 203px; height: 64px"></span></a>
+<nav aria-label="主選單" style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 28px; font-size: 16px; font-weight: 500">
+<a href="/blog" data-nh-nav="posts" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; color: #F1E9D6; text-decoration: none; border-bottom: 2px solid transparent">文章</a>
+<a href="/#about" data-nh-nav="about" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; color: #F1E9D6; text-decoration: none; border-bottom: 2px solid transparent">關於</a>
+<a href="/#contact" data-nh-nav="contact" style="display: inline-flex; align-items: center; min-height: 44px; box-sizing: border-box; color: #F1E9D6; text-decoration: none; border-bottom: 2px solid transparent">聯絡</a>
+</nav>
+</div>
+</header>
+</template>
+<template id="nh-tpl-footer">
+<footer class="nh-chrome nh-chrome-footer" data-theme="dark" style="background: #06172E; color: #F1E9D6">
+<div aria-hidden="true" style="height: 56px; background: linear-gradient(180deg, #4CC3CE 0%, #2A93AE 16%, #135477 45%, #061F36 100%)"></div>
+<div id="contact" style="max-width: 1080px; margin: 0 auto; padding: 56px 24px 48px; display: flex; flex-wrap: wrap; gap: 28px 40px; align-items: center; justify-content: space-between">
+<div style="flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+<p style="margin: 0; font-family: 'Cinzel', 'Times New Roman', serif; font-size: 14px; font-weight: 600; letter-spacing: 0.12em; color: #4CC3CE">CONTACT</p>
+<h2 style="margin: 0; font-family: 'Noto Serif TC', serif; font-size: 32px; line-height: 1.35; font-weight: 700; color: #F2A541">有問題想討論？</h2>
+<p style="margin: 0; color: #F1E9D6">對文章內容有不同經驗，或有測量、資料處理上的問題，歡迎來信。</p>
+</div>
+<a href="mailto:admin@neptus-hyd.com" style="display: inline-flex; align-items: center; min-height: 48px; box-sizing: border-box; padding: 12px 24px; background: #F2A541; color: #06172E; border: 1px solid #3A2508; border-radius: 4px; font-family: 'Noto Sans Mono', ui-monospace, monospace; font-size: 16px; font-weight: 500; text-decoration: none; filter: drop-shadow(1px 1px 0 rgba(20, 11, 1, 0.55))">admin@neptus-hyd.com</a>
+</div>
+<div style="max-width: 1080px; margin: 0 auto; padding: 0 24px">
+<div style="border-top: 1px solid rgba(159, 177, 198, 0.25); padding: 32px 0 40px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px">
+<span class="nh-logo" role="img" aria-label="NeptusHydro" style="display: block; width: 405px; max-width: 100%; aspect-ratio: 810 / 256"></span>
+<div style="display: flex; flex-direction: column; gap: 2px; font-size: 14px; line-height: 1.6; color: #9FB1C6">
+<span>© 2026 NeptusHydro</span>
+<span style="font-family: 'Noto Sans Mono', ui-monospace, monospace">neptus-hyd.com</span>
+</div>
+</div>
+</div>
+</footer>
+</template>
+<template id="nh-tpl-bloglist">
+<div data-nh-posts style="display: flex; flex-direction: column; gap: 28px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<p style="margin: 0; font-family: 'Cinzel', 'Times New Roman', serif; font-size: 14px; font-weight: 600; letter-spacing: 0.12em; color: #8E5A14">TECHNICAL NOTES</p>
+<h1 style="margin: 0; font-family: 'Noto Serif TC', serif; font-size: 40px; line-height: 1.35; font-weight: 700; color: #0F3D6B">技術筆記</h1>
+</div>
+<div data-nh-filters role="group" aria-label="依主題篩選" style="display: flex; flex-wrap: wrap; gap: 8px"></div>
+</div>
+<div data-nh-list style="display: flex; flex-direction: column"><p style="margin: 0; color: #4A5B70">文章載入中…</p></div>
+<p data-nh-empty style="display: none; margin: 0; color: #4A5B70">這個主題還沒有文章。</p>
+
+</div>
+</template>
+<script>
+(function () {
+  if (window.__nhChrome) return; window.__nhChrome = true;
+  var path = location.pathname.replace(/\/+$/, '') || '/';
+
+  // ---- post list: renders /blog?format=json into [data-nh-posts]
+  var BLOG = '/blog';
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]; }); }
+  function txt(html) { var d = document.createElement('div'); d.innerHTML = html || ''; return (d.textContent || '').replace(/\s+/g, ' ').trim(); }
+  function ymd(ms) {
+    try { return new Intl.DateTimeFormat('sv-SE', {timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date(ms)); }
+    catch (e) { return new Date(ms).toISOString().slice(0, 10); }
+  }
+  function minutes(it) { var n = txt(it.body).length; return n ? Math.max(1, Math.round(n / 450)) : 0; }
+  function cats(it) { return (it.categories || []).concat([]).filter(Boolean); }
+  function thumb(it) {
+    if (it.assetUrl && !/\/static\//.test(it.assetUrl)) {
+      return '<img src="' + esc(it.assetUrl) + '?format=1000w" alt="" loading="lazy" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover">';
+    }
+    if (document.getElementById('nh-scene')) {
+      return '<svg viewBox="806 60 620 430" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%"><use href="#nh-scene"></use></svg>';
+    }
+    return '';
+  }
+  function meta(it, withTime) {
+    var c = cats(it).join(' · ');
+    var m = withTime ? minutes(it) : 0;
+    return '<p style="margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 14px; line-height: 1.5">' +
+      (c ? '<span style="color: #0B7068; font-weight: 500">' + esc(c) + '</span>' : '') +
+      '<span style="font-family: \'Noto Sans Mono\', ui-monospace, monospace; color: #4A5B70">' + ymd(it.publishOn || it.addedOn) + '</span>' +
+      (m ? '<span style="color: #4A5B70">約 ' + m + ' 分鐘</span>' : '') + '</p>';
+  }
+  function bigCard(it) {
+    return '<a href="' + esc(it.fullUrl) + '" data-nh-tags="' + esc(cats(it).join('|')) + '" style="display: flex; flex-wrap: wrap; text-decoration: none; color: #06172E; background: #F1E9D6; border: 1px solid #CDBF9E; border-radius: 4px; overflow: hidden">' +
+      '<div style="flex: 1 1 380px; min-height: 290px; position: relative; overflow: hidden; background: linear-gradient(180deg, #7DBBE0 0%, #A9D5EB 45%, #DCEFF6 100%)">' + thumb(it) + '</div>' +
+      '<div style="flex: 1.4 1 420px; min-width: 0; padding: 36px 40px; display: flex; flex-direction: column; gap: 16px">' + meta(it, true) +
+      '<h3 style="margin: 0; padding-bottom: 16px; border-bottom: 1px solid #CDBF9E; font-family: \'Noto Serif TC\', serif; font-size: 24px; line-height: 1.45; font-weight: 700; color: #0F3D6B; text-wrap: pretty">' + esc(it.title) + '</h3>' +
+      '<p style="margin: 0; color: #4A5B70; line-height: 1.7">' + esc(txt(it.excerpt)) + '</p>' +
+      '<span style="margin-top: auto; font-weight: 500; color: #1A4682">閱讀全文 →</span></div></a>';
+  }
+  function row(it) {
+    return '<a href="' + esc(it.fullUrl) + '" data-nh-tags="' + esc(cats(it).join('|')) + '" style="display: flex; flex-direction: column; gap: 10px; padding: 24px 0; border-top: 1px solid #CDBF9E; text-decoration: none; color: #06172E">' + meta(it, true) +
+      '<h3 style="margin: 0; font-family: \'Noto Serif TC\', serif; font-size: 22px; line-height: 1.45; font-weight: 700; color: #0F3D6B; text-wrap: pretty">' + esc(it.title) + '</h3>' +
+      (it.excerpt ? '<p style="margin: 0; color: #4A5B70; line-height: 1.7; max-width: 72ch">' + esc(txt(it.excerpt)) + '</p>' : '') + '</a>';
+  }
+  var BTN_ON = 'min-height: 44px; padding: 0 18px; border: 1px solid #0F3D6B; background: #0F3D6B; color: #FFFFFF; border-radius: 2px; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer';
+  var BTN_OFF = 'min-height: 44px; padding: 0 18px; border: 1px solid #CDBF9E; background: #F1E9D6; color: #06172E; border-radius: 2px; font-family: inherit; font-size: 14px; font-weight: 400; cursor: pointer';
+  function renderInto(box) {
+    var limit = parseInt(box.getAttribute('data-limit') || '0', 10);
+    var list = box.querySelector('[data-nh-list]');
+    var filters = box.querySelector('[data-nh-filters]');
+    var more = box.querySelector('[data-nh-more]');
+    var empty = box.querySelector('[data-nh-empty]');
+    var items = [];
+    var current = 'all';
+    function draw() {
+      var shown = items.filter(function (it) { return current === 'all' || cats(it).indexOf(current) >= 0; });
+      if (limit) shown = shown.slice(0, limit);
+      list.innerHTML = shown.map(function (it, i) { return i === 0 ? bigCard(it) : row(it); }).join('');
+      if (empty) empty.style.display = shown.length ? 'none' : 'block';
+    }
+    function drawFilters() {
+      if (!filters) return;
+      var seen = [];
+      items.forEach(function (it) { cats(it).forEach(function (c) { if (seen.indexOf(c) < 0) seen.push(c); }); });
+      if (!seen.length) { filters.innerHTML = ''; return; }
+      filters.innerHTML = ['all'].concat(seen).map(function (c) {
+        return '<button type="button" data-f="' + esc(c) + '" aria-pressed="' + (c === current) + '" style="' + (c === current ? BTN_ON : BTN_OFF) + '">' + (c === 'all' ? '全部' : esc(c)) + '</button>';
+      }).join('');
+      Array.prototype.forEach.call(filters.querySelectorAll('button'), function (b) {
+        b.addEventListener('click', function () { current = b.getAttribute('data-f'); drawFilters(); draw(); });
+      });
+    }
+    function load(url) {
+      return fetch(url, {credentials: 'same-origin'}).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function (j) {
+        items = items.concat(j.items || []);
+        var next = j.pagination && j.pagination.nextPage ? j.pagination.nextPageUrl : null;
+        if (next && !limit) return load(next + (next.indexOf('?') < 0 ? '?' : '&') + 'format=json');
+      });
+    }
+    load(BLOG + '?format=json').then(function () {
+      var q = new URLSearchParams(location.search).get('category');
+      if (q) current = q;
+      drawFilters(); draw();
+      if (more) more.style.display = limit && items.length > limit ? 'inline-flex' : 'none';
+    }).catch(function () {
+      list.innerHTML = '<p style="margin: 0; color: #4A5B70">文章列表暫時無法載入，請直接前往 <a href="' + BLOG + '">全部文章</a>。</p>';
+    });
+  }
+
+  function nav() {
+    var key = path === '/' || path.indexOf(BLOG) === 0 ? 'posts' : '';
+    Array.prototype.forEach.call(document.querySelectorAll('[data-nh-nav]'), function (a) {
+      var on = a.getAttribute('data-nh-nav') === key;
+      a.style.borderBottomColor = on ? '#F2A541' : 'transparent';
+      if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+  }
+  function mount() {
+    var wrap = document.getElementById('siteWrapper') || document.body;
+    var page = document.getElementById('page') || wrap.querySelector('main');
+    var th = document.getElementById('nh-tpl-header'), tf = document.getElementById('nh-tpl-footer');
+    if (th && !document.querySelector('.nh-chrome-header')) {
+      if (page && page.parentNode) page.parentNode.insertBefore(th.content.cloneNode(true), page);
+      else wrap.insertBefore(th.content.cloneNode(true), wrap.firstChild);
+    }
+    if (tf && !document.querySelector('.nh-chrome-footer')) {
+      if (page && page.parentNode) page.parentNode.insertBefore(tf.content.cloneNode(true), page.nextSibling);
+      else wrap.appendChild(tf.content.cloneNode(true));
+    }
+    nav();
+    // blog list page: replace the native list with the NeptusHydro list
+    var b = document.body.classList;
+    if (b.contains('collection-type-blog') && b.contains('view-list') && !document.querySelector('[data-nh-posts]')) {
+      var tl = document.getElementById('nh-tpl-bloglist');
+      var host = document.querySelector('.blog-list-section, section.collection-content-wrapper, #sections') || page;
+      if (tl && host) {
+        var holder = document.createElement('div');
+        holder.className = 'nh-page nh-bloglist';
+        holder.setAttribute('style', "font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; font-size: 16px; line-height: 1.7; color: #06172E; max-width: 1080px; margin: 0 auto; padding: 72px 24px 88px");
+        holder.appendChild(tl.content.cloneNode(true));
+        host.parentNode.insertBefore(holder, host);
+        document.documentElement.classList.add('nh-has-bloglist');
+      }
+    }
+    // post page: back link above the title
+    if (b.contains('collection-type-blog') && b.contains('view-item') && !document.querySelector('.nh-back')) {
+      var t = document.querySelector('.blog-item-top-wrapper, .blog-item-title, article .entry-title');
+      if (t) {
+        var a = document.createElement('a');
+        a.className = 'nh-back'; a.href = BLOG; a.textContent = '← 回到文章列表';
+        t.parentNode.insertBefore(a, t);
+      }
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('[data-nh-posts]'), function (box) {
+      if (!box.__nh) { box.__nh = true; renderInto(box); }
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
+})();
+</script>
