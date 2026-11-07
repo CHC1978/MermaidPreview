@@ -1,6 +1,6 @@
 <div class="nh-post" style="font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; font-size: 16px; line-height: 1.7; color: #06172E">
 
-<p style="margin: 0 0 8px; font-size: 18px; line-height: 1.75; color: #4A5B70">每套多音束系統都需要兩種聲速資料：換能器旁的表面聲速，以及整個水柱的聲速剖面（SVP）。資料一樣，但收發換能器是裝在同一個聲納頭裡，還是分成兩支獨立安裝，會讓聲速改正（ray tracing）的起始條件、需要輸入的安裝參數，以及誤差在資料上的樣子都不一樣。這篇不談公式推導，只整理實務上最容易踩到的差異。</p>
+<p style="margin: 0 0 8px; font-size: 18px; line-height: 1.75; color: #4A5B70">當 TX、RX 換能器可以各自設定 lever arm 與安裝角（angle offset）時，這些參數不是安裝完就算了：它們會直接進入聲速改正（SVC）的計算，決定 ray tracing 從哪裡出發、往哪個方向出發。這篇從 SVC 的計算過程出發，整理 TX、RX 分開安裝時要注意的事，並以 TX、RX 封裝在同一聲納頭的一體式作為對照。不談公式推導，只談實務上最容易踩到的地方。</p>
 
 <h2 style="margin: 48px 0 20px; padding-top: 40px; border-top: 1px solid #CDBF9E; font-family: 'Noto Serif TC', serif; font-size: 32px; line-height: 1.35; font-weight: 700; color: #0F3D6B">兩種聲速，兩種用途</h2>
 <p style="margin: 0 0 16px"><strong>表面聲速</strong>由裝在換能器附近的聲速探頭即時量測，用在聲納的<strong>波束形成</strong>：平板陣列要把波束轉到某個角度，各陣元之間的時間延遲是用這個聲速換算的。</p>
@@ -8,10 +8,10 @@
 <p style="margin: 0">表面聲速決定波束往哪個方向出發，剖面決定聲線怎麼彎。而波束從哪裡出發、往哪個方向出發，取決於收發換能器怎麼裝。</p>
 
 <h2 style="margin: 48px 0 20px; padding-top: 40px; border-top: 1px solid #CDBF9E; font-family: 'Noto Serif TC', serif; font-size: 32px; line-height: 1.35; font-weight: 700; color: #0F3D6B">一體式與分體式：差在哪裡</h2>
-<p style="margin: 0 0 16px"><strong>一體式安裝</strong>：TX、RX 封裝在同一個聲納頭內（常見為 RX 在前、TX 在後），彼此的幾何關係出廠就固定，韌體並定義了單一的 sonar reference point，輸出的旅行時間與角度都以這個點為準。安裝時只需輸入一組 lever arm 與一組安裝角，使用者無法、也不需要把 TX 與 RX 分開處理。這類系統常見於中淺水、小型船或可攜式安裝。</p>
+<p style="margin: 0 0 16px"><strong>一體式安裝</strong>：TX、RX 封裝在同一個聲納頭內，兩者的相對位置與角度出廠就固定。原廠定義聲納頭的參考點，TX、RX 相對於這個點的內部偏移已內建在系統與處理軟體中，處理時仍是把 TX、RX 分開計算，只是不需要使用者輸入。安裝時只需輸入一組 lever arm 與一組安裝角。這類系統機型不多（以 Kongsberg Discovery 為例，只有少數幾個系列），常見於中淺水、小型船或可攜式安裝。</p>
 <p style="margin: 0 0 16px"><strong>分體式安裝</strong>：TX 與 RX 是兩個獨立的換能器，以 Mills cross 配置分別固定在船底，各有自己的 lever arm 與安裝角，必須分別量測、分別輸入。中深水系統的陣列動輒數公尺長，幾乎都是分體式；淺水系統也有分體式設計。</p>
 <figure style="margin: 8px 0 32px; background: #F1E9D6; border: 1px solid #CDBF9E; border-radius: 4px; padding: 24px">
-<svg viewBox="0 0 720 400" role="img" aria-label="船底仰視圖比較。上：一體式聲納頭，TX 與 RX 在同一殼體內，由韌體定義單一 sonar reference point，只需一組 lever arm。下：分體式系統的 TX 與 RX 是分開安裝的兩個換能器，各自有 lever arm 與安裝角。" style="width: 100%; height: auto; display: block; font-family: 'Noto Sans TC', sans-serif">
+<svg viewBox="0 0 720 400" role="img" aria-label="船底仰視圖比較。上：一體式聲納頭，TX 與 RX 在同一殼體內，TX、RX 相對位置由原廠固定並內建，只需一組 lever arm。下：分體式系統的 TX 與 RX 是分開安裝的兩個換能器，各自有 lever arm 與安裝角。" style="width: 100%; height: auto; display: block; font-family: 'Noto Sans TC', sans-serif">
 <rect x="512" y="12" width="16" height="10" fill="#1A4682"></rect>
 <text x="534" y="21" font-size="12" fill="#4A5B70">TX 發射陣</text>
 <rect x="610" y="12" width="16" height="10" fill="#8E5A14"></rect>
@@ -29,15 +29,15 @@
 <rect x="398" y="68" width="86" height="74" rx="8" fill="#FBF8F1" stroke="#0F3D6B" stroke-width="1.5"></rect>
 <rect x="406" y="98" width="62" height="14" rx="2" fill="#1A4682"></rect>
 <rect x="462" y="74" width="14" height="62" rx="2" fill="#8E5A14"></rect>
-<text x="432" y="90" text-anchor="middle" font-size="10" font-weight="600" fill="#1A4682">TX 在後</text>
-<text x="488" y="84" font-size="10" font-weight="600" fill="#8E5A14">RX 在前</text>
+<text x="432" y="90" text-anchor="middle" font-size="10" font-weight="600" fill="#1A4682">TX</text>
+<text x="488" y="84" font-size="10" font-weight="600" fill="#8E5A14">RX</text>
 <circle cx="469" cy="105" r="6" fill="#FBF8F1" stroke="#0F3D6B" stroke-width="1.5"></circle>
 <path d="M463 105 L475 105 M469 99 L469 111" stroke="#0F3D6B" stroke-width="1.2"></path>
 <path d="M288 101 Q 380 76 462 100" fill="none" stroke="#0F3D6B" stroke-width="1.5" stroke-dasharray="5 3"></path>
 <path d="M455.4 94 L462 100 L453.2 101.6" fill="none" stroke="#0F3D6B" stroke-width="1.5"></path>
 <text x="372" y="79" text-anchor="middle" font-size="11" fill="#06172E">1 組 lever arm</text>
 <path d="M469 142 L469 166" stroke="#0F3D6B" stroke-width="1"></path>
-<text x="440" y="182" text-anchor="middle" font-size="12" fill="#06172E">Sonar Reference Point：韌體定義，TX / RX 幾何固定</text>
+<text x="440" y="182" text-anchor="middle" font-size="12" fill="#06172E">聲納頭參考點：TX／RX 相對位置由原廠固定、內建</text>
 <line x1="20" y1="202" x2="700" y2="202" stroke="#CDBF9E" stroke-width="1"></line>
 <text x="20" y="230" font-size="14" font-weight="600" fill="#06172E">分體式安裝：TX、RX 為兩個獨立換能器</text>
 <text x="20" y="248" font-size="12" fill="#4A5B70">船底仰視圖，Mills cross 配置，TX 與 RX 分別安裝</text>
@@ -63,14 +63,14 @@
 <path d="M495 312 L507 312 M501 306 L501 318" stroke="#0F3D6B" stroke-width="1.2"></path>
 <text x="360" y="388" text-anchor="middle" font-size="12" fill="#06172E">TX、RX 各有參考點與安裝參數，需分別量測、分別輸入</text>
 </svg>
-<figcaption style="margin-top: 16px; font-size: 14px; color: #4A5B70; line-height: 1.7"><span style="color: #8E5A14; font-weight: 700">圖 1</span>　船底仰視圖。上：一體式安裝，RX 在前、TX 在後，封裝在同一殼體內，幾何由原廠固定，韌體以單一 sonar reference point 輸出資料，安裝時只需一組 lever arm 與安裝角。下：分體式安裝，TX、RX 是兩個獨立換能器，各自有位置與角度。</figcaption>
+<figcaption style="margin-top: 16px; font-size: 14px; color: #4A5B70; line-height: 1.7"><span style="color: #8E5A14; font-weight: 700">圖 1</span>　船底仰視圖。上：一體式安裝，TX、RX 封裝在同一殼體內，相對位置由原廠固定並內建於系統，安裝時只需一組 lever arm 與安裝角。下：分體式安裝，TX、RX 是兩個獨立換能器，各自有位置與角度。</figcaption>
 </figure>
-<p style="margin: 0">兩者在聲速改正上的差異，主要來自三件事：參考點是一個還是兩個、發射波束有沒有導向，以及發射與接收之間的時間差能不能忽略。</p>
+<p style="margin: 0">兩者在聲速改正上的差異，主要來自三件事：安裝參數是一組還是兩組、TX 與 RX 相距多遠，以及這段距離加上發射與接收之間的時間差，能不能忽略。</p>
 
 <h2 style="margin: 48px 0 20px; padding-top: 40px; border-top: 1px solid #CDBF9E; font-family: 'Noto Serif TC', serif; font-size: 32px; line-height: 1.35; font-weight: 700; color: #0F3D6B">差異的根源：ray tracing 的起始向量</h2>
 <p style="margin: 0 0 16px">Ray tracing 要從一個起始方向出發：這個波束在水中的入射角與方位角，也就是「波束向量」。聲速剖面再準，起始向量算錯，後面整條聲線都會跟著錯。一體式與分體式真正的分歧，就在這個起始向量怎麼算。</p>
-<p style="margin: 0 0 16px"><strong>一體式</strong>：收發共用同一個參考點，典型配置也不做發射導向，波束向量只需要接收導向角、姿態與安裝角，共 7 個角度，學界稱為「收發同體模型」。</p>
-<p style="margin: 0 0 16px"><strong>分體式</strong>：為了補償縱搖與首搖，發射波束常依當下姿態做電子導向，並把一個 ping 拆成多個扇區、各扇區導向角不同（依水深模式而定，以 Kongsberg Discovery MBES 為例，常見 3 到 8 個扇區）。再加上 TX、RX 位置不同，從發射到接收之間船已移動、姿態也變了（圖 2），波束實際上是「發射圓錐面」與「接收圓錐面」的交線，必須同時考慮兩個時刻、兩支陣列的角度與位置。</p>
+<p style="margin: 0 0 16px"><strong>一體式</strong>：發射波束同樣會依縱搖做電子導向（多數機型也有首搖穩定與分扇區發射），所以波束向量一樣要同時考慮發射導向角與接收導向角。差別在於 TX、RX 在同一殼體內、相距很短，間距與相對角度由原廠內建，收發分置與時間差造成的影響小。</p>
+<p style="margin: 0 0 16px"><strong>分體式</strong>：同樣依當下姿態對發射波束做電子導向，並把一個 ping 拆成多個扇區、各扇區導向角不同（依水深模式而定，以 Kongsberg Discovery MBES 為例，常見 3 到 8 個扇區）。但 TX、RX 是分開安裝、相距可達數公尺，從發射到接收之間船已移動、姿態也變了（圖 2），波束實際上是「發射圓錐面」與「接收圓錐面」的交線，必須同時考慮兩個時刻、兩支陣列的角度與位置。</p>
 <figure style="margin: 8px 0 32px; background: #F1E9D6; border: 1px solid #CDBF9E; border-radius: 4px; padding: 24px">
 <svg viewBox="0 0 720 410" role="img" aria-label="沿航向側視圖。發射時刻船艏上仰，分體式系統的發射陣以導向把波束拉回垂直；聲波到海底反射後，船已前進，由新位置的接收陣接收，發射與接收聲線不重疊。" style="width: 100%; height: auto; display: block; font-family: 'Noto Sans TC', sans-serif">
 <rect x="20" y="110" width="680" height="270" fill="#DDEDEE"></rect>
@@ -123,7 +123,7 @@
 </svg>
 <figcaption style="margin-top: 16px; font-size: 14px; color: #4A5B70; line-height: 1.7"><span style="color: #8E5A14; font-weight: 700">圖 2</span>　沿航向側視圖（角度與距離誇大示意）。發射時船艏上仰，分體式系統的 TX 以導向把波束拉回垂直；回波返回時船已前進，由新位置的 RX 接收，兩條聲線不再重疊。</figcaption>
 </figure>
-<p style="margin: 0 0 16px">針對這個問題，加拿大 OMG 團隊發展了<strong>虛擬同心模型（VCCA）</strong>，考慮 14 個角度；後來 Travis 等人（2014）再加入收發陣列之間的位置偏移與船行偏移，成為<strong>收發分置模型（NCCA）</strong>。</p>
+<p style="margin: 0 0 16px">針對這個問題，加拿大 OMG 團隊發展了<strong>虛擬同心模型（VCCA）</strong>，考慮 14 個角度；後來 Hamilton（2014）再加入收發陣列之間的位置偏移與船行偏移，並對發射與接收兩條聲線分別做 ray tracing、反覆求解到兩段單程時間相加等於量測的雙程時間，成為<strong>收發分置模型（NCCA）</strong>。</p>
 <figure style="margin: 8px 0 32px; background: #F1E9D6; border: 1px solid #CDBF9E; border-radius: 4px; padding: 24px">
 <svg viewBox="0 0 720 320" role="img" aria-label="海底俯視圖：三個發射扇區因導向角不同，在海底形成三條不同的曲線，與接收曲線交於不同位置；簡化模型則把所有點放在船正橫方向的同一條線上" style="width: 100%; height: auto; display: block; font-family: 'Noto Sans TC', sans-serif">
 <rect x="20" y="10" width="680" height="280" fill="#FBF8F1" rx="6"></rect>
@@ -153,13 +153,13 @@
 </svg>
 <figcaption style="margin-top: 16px; font-size: 14px; color: #4A5B70; line-height: 1.7"><span style="color: #8E5A14; font-weight: 700">圖 3</span>　海底俯視圖（分體式、多扇區發射）。同一個接收角，在不同扇區會落在不同位置。若忽略發射導向，所有點都被算到船正橫方向的同一條線上；水越深、導向角越大，偏差越大。</figcaption>
 </figure>
-<p style="margin: 0 0 16px">如果把分體式的資料用簡化的收發同體模型處理，會差多少？一份比較這幾種模型的研究簡報給了很直接的數字：</p>
+<p style="margin: 0 0 16px">如果把分體式的資料用簡化的「收發同體模型」處理（假設 TX、RX 同點、忽略發射導向，只用接收導向角、姿態與安裝角共 7 個角度），會差多少？一份比較這幾種模型的研究簡報給了很直接的數字：</p>
 <ul style="margin: 0 0 16px; padding-left: 22px; display: flex; flex-direction: column; gap: 8px">
 <li>淺水（18–28 m）：與 VCCA 相比，水深最大差約 0.34 m，約 0.2% 的點超過 1% 水深限差。影響不大，但海況變差時會增加。</li>
 <li>深水（約 800–1060 m）：平面位置差最大約 44 m，約 37% 的點超過 1% 水深限差，簡化模型基本上不能用。</li>
 </ul>
 <p style="margin: 0 0 16px">同一份研究也指出，這些模型都把波束能量當成規則圓錐面，<strong>忽略了聲速變化對圓錐面本身的折射扭曲</strong>，在全海深環境下仍有系統誤差。換句話說，波束向量與聲速改正其實是綁在一起的問題。</p>
-<p style="margin: 0">另外要注意：「一體式不做發射導向」只是典型情況。部分一體式機型有發射導向選配，啟用時波束向量要把發射導向角也算進去；不過收發仍共用同一個參考點，不會有分體式的收發分置問題。</p>
+<p style="margin: 0">一體式也不適合套用這個簡化模型：它同樣有發射導向與分扇區發射，處理時仍應使用含發射導向角、並帶入原廠內建 TX／RX 偏移的模型。只是收發相距很短，收發分置造成的誤差遠小於分體式。</p>
 
 <h2 style="margin: 48px 0 20px; padding-top: 40px; border-top: 1px solid #CDBF9E; font-family: 'Noto Serif TC', serif; font-size: 32px; line-height: 1.35; font-weight: 700; color: #0F3D6B">表面聲速差一點，外側波束差多少？</h2>
 <p style="margin: 0 0 16px">以平板陣列為例，假設實際表面聲速是 1503 m/s，探頭卻讀到 1500 m/s（誤差 0.2%）。波束形成時以為轉到 60°，實際指向約 60.2°。</p>
@@ -182,8 +182,8 @@
 </tr>
 </thead>
 <tbody>
-<tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">RX roll 安裝角</th><td style="padding: 14px 16px">0.1°</td><td style="padding: 14px 16px">水深差約 ±0.15 m，左右相反</td><td style="padding: 14px 16px">條帶一邊高、一邊低</td></tr>
-<tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">TX pitch 安裝角</th><td style="padding: 14px 16px">0.5°</td><td style="padding: 14px 16px">沿航向位移：正下方約 0.44 m、外側約 0.87 m；水深幾乎不變</td><td style="padding: 14px 16px">往返測線上，地物前後錯開</td></tr>
+<tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">安裝 roll（經由 RX 表現）</th><td style="padding: 14px 16px">0.1°</td><td style="padding: 14px 16px">水深差約 ±0.15 m，左右相反</td><td style="padding: 14px 16px">條帶一邊高、一邊低</td></tr>
+<tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">安裝 pitch（經由 TX 表現）</th><td style="padding: 14px 16px">0.5°</td><td style="padding: 14px 16px">沿航向位移：正下方約 0.44 m、外側約 0.87 m；水深幾乎不變</td><td style="padding: 14px 16px">往返測線上，地物前後錯開</td></tr>
 <tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">TX／RX 相對 heading</th><td style="padding: 14px 16px">0.5°</td><td style="padding: 14px 16px">外側沿航向位移約 0.76 m，左右相反</td><td style="padding: 14px 16px">條帶相對航向歪斜，扇區交界錯位</td></tr>
 <tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">TX／RX 相對位置</th><td style="padding: 14px 16px">沿航向量錯</td><td style="padding: 14px 16px">依導向角與水深而定；淺水、大導向角時影響水深</td><td style="padding: 14px 16px">扇區交界出現階差</td></tr>
 <tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">垂直 lever arm（Z）</th><td style="padding: 14px 16px">0.10 m</td><td style="padding: 14px 16px">全條帶水深偏 0.10 m，聲線起始深度也跟著偏</td><td style="padding: 14px 16px">與其他船、潮位基準不符</td></tr>
@@ -192,9 +192,9 @@
 </table>
 </div>
 <figure style="margin: 8px 0 32px; background: #F1E9D6; border: 1px solid #CDBF9E; border-radius: 4px; padding: 24px">
-<svg viewBox="0 0 720 472" role="img" aria-label="四種誤差在資料上的樣子：RX roll 誤差使條帶一邊高一邊低；聲速誤差使條帶左右對稱彎曲；TX pitch 誤差使條帶在俯視上前移且外側移更多；TX 與 RX 相對 heading 誤差使條帶相對航向歪斜。" style="width: 100%; height: auto; display: block; font-family: 'Noto Sans TC', sans-serif">
+<svg viewBox="0 0 720 472" role="img" aria-label="四種誤差在資料上的樣子：安裝 roll 誤差使條帶一邊高一邊低；聲速誤差使條帶左右對稱彎曲；安裝 pitch 誤差使條帶在俯視上前移且外側移更多；TX 與 RX 相對 heading 誤差使條帶相對航向歪斜。" style="width: 100%; height: auto; display: block; font-family: 'Noto Sans TC', sans-serif">
 <rect x="20" y="20" width="335" height="200" rx="6" fill="#FBF8F1"></rect>
-<text x="36" y="46" font-size="13" font-weight="600" fill="#8E5A14">① RX roll 安裝角誤差</text>
+<text x="36" y="46" font-size="13" font-weight="600" fill="#8E5A14">① 安裝 roll 誤差（經由 RX）</text>
 <text x="36" y="64" font-size="12" fill="#4A5B70">跨航向剖面：一邊高、一邊低</text>
 <path d="M187 88 L50 150 M187 88 L325 190" stroke="#9FB1C6" stroke-width="1"></path>
 <line x1="50" y1="170" x2="325" y2="170" stroke="#6E7F91" stroke-width="1.5" stroke-dasharray="6 4"></line>
@@ -211,7 +211,7 @@
 <rect x="524" y="80" width="16" height="8" rx="1.5" fill="#0F3D6B"></rect>
 <text x="532" y="208" text-anchor="middle" font-size="11" fill="#06172E">兩側同時上翹或下彎</text>
 <rect x="20" y="240" width="335" height="200" rx="6" fill="#FBF8F1"></rect>
-<text x="36" y="266" font-size="13" font-weight="600" fill="#1A4682">③ TX pitch 安裝角誤差</text>
+<text x="36" y="266" font-size="13" font-weight="600" fill="#1A4682">③ 安裝 pitch 誤差（經由 TX）</text>
 <text x="36" y="284" font-size="12" fill="#4A5B70">海底俯視：條帶前移，外側移更多</text>
 <line x1="45" y1="400" x2="330" y2="400" stroke="#6E7F91" stroke-width="1.5" stroke-dasharray="6 4"></line>
 <path d="M45 345 Q 187.5 395 330 345" fill="none" stroke="#0F3D6B" stroke-width="2.5"></path>
@@ -236,7 +236,7 @@
 <text x="270" y="462" font-size="12" fill="#4A5B70">量測結果</text>
 <text x="700" y="462" text-anchor="end" font-size="12" fill="#4A5B70">誤差量誇大示意</text>
 </svg>
-<figcaption style="margin-top: 16px; font-size: 14px; color: #4A5B70; line-height: 1.7"><span style="color: #8E5A14; font-weight: 700">圖 4</span>　安裝參數誤差與聲速誤差在資料上的不同樣子。①②為跨航向剖面，③④為海底俯視。RX 誤差表現在跨航向，TX 誤差表現在沿航向。</figcaption>
+<figcaption style="margin-top: 16px; font-size: 14px; color: #4A5B70; line-height: 1.7"><span style="color: #8E5A14; font-weight: 700">圖 4</span>　安裝參數誤差與聲速誤差在資料上的不同樣子。①②為跨航向剖面，③④為海底俯視。roll 誤差經由 RX 表現在跨航向，pitch 誤差經由 TX 表現在沿航向。</figcaption>
 </figure>
 <p style="margin: 0 0 16px">三個實務重點：</p>
 <ul style="margin: 0 0 16px; padding-left: 22px; display: flex; flex-direction: column; gap: 10px">
@@ -258,10 +258,10 @@
 </thead>
 <tbody>
 <tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">收發換能器</th><td style="padding: 14px 16px">同一殼體，幾何由原廠固定</td><td style="padding: 14px 16px">兩個獨立換能器，各自安裝</td></tr>
-<tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">參考點</th><td style="padding: 14px 16px">韌體定義單一 sonar reference point</td><td style="padding: 14px 16px">TX、RX 各自的參考點</td></tr>
+<tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">參考點</th><td style="padding: 14px 16px">聲納頭一個參考點，TX／RX 內部偏移由原廠內建</td><td style="padding: 14px 16px">TX、RX 各自量測位置</td></tr>
 <tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">安裝參數</th><td style="padding: 14px 16px">一組 lever arm＋一組安裝角</td><td style="padding: 14px 16px">兩組 lever arm＋兩組安裝角</td></tr>
-<tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">發射導向</th><td style="padding: 14px 16px">典型無；部分機型有選配</td><td style="padding: 14px 16px">常見，依姿態分扇區導向</td></tr>
-<tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">波束向量模型</th><td style="padding: 14px 16px">收發同體模型（7 個角度）</td><td style="padding: 14px 16px">VCCA／NCCA（TX、RX 分開計算）</td></tr>
+<tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">發射導向</th><td style="padding: 14px 16px">有，依縱搖導向，多數機型分扇區</td><td style="padding: 14px 16px">有，依姿態分扇區導向</td></tr>
+<tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">波束向量模型</th><td style="padding: 14px 16px">TX、RX 分開計算，間距由原廠內建、影響小</td><td style="padding: 14px 16px">VCCA／NCCA（TX、RX 位置與時刻分開計算）</td></tr>
 <tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">表面聲速錯誤</th><td style="padding: 14px 16px">平板陣列影響波束角；弧形陣列較不敏感</td><td style="padding: 14px 16px">RX 波束角與 TX 導向角同時受影響</td></tr>
 <tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">Patch test 結果</th><td style="padding: 14px 16px">改在同一組安裝角</td><td style="padding: 14px 16px">整個安裝 frame 視為一體，同一組角度套用到 TX 與 RX</td></tr>
 <tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">常見情境</th><td style="padding: 14px 16px">中淺水、小型船、可攜式安裝</td><td style="padding: 14px 16px">中深水、大型船、固定船殼安裝</td></tr>
@@ -278,9 +278,9 @@
 </ul>
 
 <h2 style="margin: 48px 0 20px; padding-top: 40px; border-top: 1px solid #CDBF9E; font-family: 'Noto Serif TC', serif; font-size: 32px; line-height: 1.35; font-weight: 700; color: #0F3D6B">結語</h2>
-<p style="margin: 0">一體式把收發幾何封裝在聲納頭裡，安裝參數少、模型簡單，適合機動的中淺水作業。分體式換來更大的陣列與更完整的姿態補償，但 TX、RX 各自的位置與角度、發射導向，以及收發之間的時間差，都必須正確進入聲速改正的計算。了解自己的系統屬於哪一種，才能在資料出問題時，知道要回頭檢查哪一段。</p>
+<p style="margin: 0">一體式把收發幾何封裝在聲納頭裡，安裝參數少、收發間距由原廠固定，適合機動的中淺水作業。分體式換來更大的陣列，可做到更窄的波束與更深的水深，但 TX、RX 各自的位置與角度、發射導向，以及收發之間的時間差，都必須正確進入聲速改正的計算。只要換能器可以各自設定 lever arm 與安裝角，這些參數就是 SVC 計算的一部分：量得準、設得對，聲速改正才有正確的起點；發現有誤，就要從原始資料重新計算，而不是事後修補 XYZ。</p>
 
-<p style="margin: 40px 0 0; font-size: 14px; line-height: 1.7; color: #4A5B70">參考：Clarke (2000)；Beaudoin et al. (2004)；Travis et al. (2014)；多波束波束歸位模型比較之研討會簡報。</p>
+<p style="margin: 40px 0 0; font-size: 14px; line-height: 1.7; color: #4A5B70">參考：Hughes Clarke (2000)；Beaudoin et al. (2004)；Hamilton (2014)；多波束波束歸位模型比較之研討會簡報。</p>
 
 <div style="margin-top: 56px; padding-top: 24px; border-top: 1px solid #CDBF9E; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; font-size: 14px">
 <span style="color: #4A5B70">NeptusHydro · 有不同的現場經驗？歡迎來信 <a href="mailto:admin@neptus-hyd.com">admin@neptus-hyd.com</a></span>
