@@ -69,97 +69,262 @@
 
 <h2 style="margin: 48px 0 20px; padding-top: 40px; border-top: 1px solid #CDBF9E; font-family: 'Noto Serif TC', serif; font-size: 32px; line-height: 1.35; font-weight: 700; color: #0F3D6B">差異的根源：ray tracing 的起始向量</h2>
 <p style="margin: 0 0 16px">Ray tracing 要從一個起始方向出發：這個波束在水中的入射角與方位角，也就是「波束向量」。聲速剖面再準，起始向量算錯，後面整條聲線都會跟著錯。一體式與分體式真正的分歧，就在這個起始向量怎麼算。</p>
-<p style="margin: 0 0 16px">把 SVC 的計算拆開來看（圖 2），每個波束都依序經過五步：先由 TX 的 Z lever arm、水線與升沉算出<strong>起始深度</strong>；再以換能器處的聲速修正 TX 傾角與 RX 波束角；接著用 TX 安裝角加上發射時刻的姿態、RX 安裝角加上接收時刻的姿態，各得到一個圓錐，兩錐的交線就是<strong>起始向量</strong>；然後沿聲速剖面做 ray tracing；最後加上 lever arm，換算到參考點。可以各自設定的安裝參數，幾乎都在 ray tracing 之前進入，這正是它們會造成資料問題、而且不容易事後修補的原因。</p>
+<p style="margin: 0 0 16px">把 SVC 的計算拆開來看，每個波束都依序經過五步：先由 TX 的 Z lever arm、水線與升沉算出<strong>起始深度</strong>；再以換能器處的聲速修正 TX 傾角與 RX 波束角；接著用 TX 安裝角加上發射時刻的姿態、RX 安裝角加上接收時刻的姿態，各得到一個圓錐，兩錐的交線就是<strong>起始向量</strong>；然後沿聲速剖面做 ray tracing；最後加上 lever arm，換算到參考點。可以各自設定的安裝參數，幾乎都在 ray tracing 之前進入，這正是它們會造成資料問題、而且不容易事後修補的原因。圖 2 用同一個聲速剖面實際追蹤聲線，依序播放四種設定錯誤：RX roll 設錯讓條帶傾斜，TX pitch 設錯讓整條帶前移，TX Z 設錯讓整條帶變深，TX roll 設錯則幾乎沒有影響。</p>
 <figure style="margin: 8px 0 32px; background: #F1E9D6; border: 1px solid #CDBF9E; border-radius: 4px; padding: 24px">
-<svg viewBox="0 0 720 600" role="img" aria-label="每個波束的 SVC 計算順序與安裝參數進入點。Z lever arm 與水平 lever arm 乘上姿態的誘發升沉在①起始深度進入；換能器處聲速在②修正導向角；TX 安裝角與發射時刻姿態、RX 安裝角與接收時刻姿態各成一個圓錐，在③求交線得到起始向量；④沿聲速剖面 ray tracing；⑤加上水平 lever arm。①③在 ray tracing 之前進入，誤差會隨聲線折射；⑤只是平移。" style="width: 100%; height: auto; display: block; font-family: 'Noto Sans TC', sans-serif">
-<text x="20" y="24" font-size="15" font-weight="700" fill="#06172E">每個波束的 SVC 計算：安裝參數從哪裡進入</text>
-<text x="20" y="44" font-size="12" fill="#4A5B70">TX、RX 可各自設定 lever arm 與安裝角時（分體式）</text>
-<text x="20" y="74" font-size="13" font-weight="700" fill="#0F3D6B">安裝參數</text>
-<text x="228" y="74" font-size="13" font-weight="700" fill="#0F3D6B">SVC 計算（每個波束依序）</text>
-<text x="520" y="74" font-size="13" font-weight="700" fill="#0F3D6B">資料上的症狀</text>
-<rect x="228" y="88" width="268" height="56" rx="4" fill="#FBF8F1" stroke="#0F3D6B" stroke-width="1.2"></rect>
-<text x="240" y="110" font-size="13" font-weight="700" fill="#06172E">① 起始深度</text>
-<text x="240" y="130" font-size="11.5" fill="#4A5B70">TX 的 Z − 水線 ＋ 升沉（含誘發升沉）</text>
-<rect x="228" y="164" width="268" height="56" rx="4" fill="#FBF8F1" stroke="#0F3D6B" stroke-width="1.2"></rect>
-<text x="240" y="186" font-size="13" font-weight="700" fill="#06172E">② 導向角修正</text>
-<text x="240" y="206" font-size="11.5" fill="#4A5B70">以換能器處聲速修正 TX 傾角與 RX 波束角</text>
-<rect x="228" y="240" width="268" height="100" rx="4" fill="#FBF8F1" stroke="#0F3D6B" stroke-width="1.2"></rect>
-<text x="240" y="262" font-size="13" font-weight="700" fill="#06172E">③ 起始向量：兩個圓錐的交線</text>
-<text x="240" y="284" font-size="11.5" font-weight="600" fill="#1A4682">TX 圓錐 ＝ TX 安裝角 × 發射時刻姿態</text>
-<text x="240" y="304" font-size="11.5" font-weight="600" fill="#8E5A14">RX 圓錐 ＝ RX 安裝角 × 接收時刻姿態</text>
-<text x="240" y="326" font-size="11.5" fill="#4A5B70">交線 → 波束入射角與方位角</text>
-<rect x="228" y="360" width="268" height="74" rx="4" fill="#DDEDEE" stroke="#0B7068" stroke-width="1.6"></rect>
-<text x="240" y="382" font-size="13" font-weight="700" fill="#0B7068">④ Ray tracing</text>
-<text x="240" y="404" font-size="11.5" fill="#06172E">從①的深度、沿③的方向出發，</text>
-<text x="240" y="422" font-size="11.5" fill="#06172E">依聲速剖面逐層折射，到旅行時間用完</text>
-<rect x="228" y="454" width="268" height="56" rx="4" fill="#FBF8F1" stroke="#0F3D6B" stroke-width="1.2"></rect>
-<text x="240" y="476" font-size="13" font-weight="700" fill="#06172E">⑤ 加上 lever arm</text>
-<text x="240" y="496" font-size="11.5" fill="#4A5B70">換算到參考點，得到落點 X／Y／Z</text>
-<path d="M362 144 L362 163" stroke="#0F3D6B" stroke-width="1.5"></path>
-<path d="M357.5 157 L362 164 L366.5 157" fill="none" stroke="#0F3D6B" stroke-width="1.5"></path>
-<path d="M362 220 L362 239" stroke="#0F3D6B" stroke-width="1.5"></path>
-<path d="M357.5 233 L362 240 L366.5 233" fill="none" stroke="#0F3D6B" stroke-width="1.5"></path>
-<path d="M362 340 L362 359" stroke="#0F3D6B" stroke-width="1.5"></path>
-<path d="M357.5 353 L362 360 L366.5 353" fill="none" stroke="#0F3D6B" stroke-width="1.5"></path>
-<path d="M362 434 L362 453" stroke="#0F3D6B" stroke-width="1.5"></path>
-<path d="M357.5 447 L362 454 L366.5 447" fill="none" stroke="#0F3D6B" stroke-width="1.5"></path>
-<text x="370" y="158" font-size="10.5" fill="#4A5B70">換能器處聲速</text>
-<path d="M224 88 L218 88 L218 340 L224 340" fill="none" stroke="#0B7068" stroke-width="1.5"></path>
-<text x="213" y="196" font-size="10.5" font-weight="600" fill="#0B7068" text-anchor="middle" transform="rotate(-90 213 196)">ray tracing 之前</text>
-<rect x="20" y="88" width="184" height="26" rx="4" fill="#FBF8F1" stroke="#CDBF9E" stroke-width="1.2"></rect>
-<text x="30" y="105" font-size="11.5" font-weight="600" fill="#06172E">Z lever arm（換能器吃水）</text>
-<path d="M204 101 L215 101" stroke="#4A5B70" stroke-width="1.3"></path>
-<path d="M209 97 L216 101 L209 105" fill="none" stroke="#4A5B70" stroke-width="1.3"></path>
-<rect x="20" y="118" width="184" height="26" rx="4" fill="#FBF8F1" stroke="#CDBF9E" stroke-width="1.2"></rect>
-<text x="30" y="135" font-size="11.5" font-weight="600" fill="#06172E">水平 lever arm × 姿態</text>
-<path d="M204 131 L215 131" stroke="#4A5B70" stroke-width="1.3"></path>
-<path d="M209 127 L216 131 L209 135" fill="none" stroke="#4A5B70" stroke-width="1.3"></path>
-<rect x="20" y="244" width="184" height="28" rx="4" fill="#FBF8F1" stroke="#CDBF9E" stroke-width="1.2"></rect>
-<text x="30" y="261" font-size="11.5" font-weight="600" fill="#1A4682">TX 安裝角：pitch、heading</text>
-<path d="M204 258 L215 258" stroke="#4A5B70" stroke-width="1.3"></path>
-<path d="M209 254 L216 258 L209 262" fill="none" stroke="#4A5B70" stroke-width="1.3"></path>
-<rect x="20" y="276" width="184" height="28" rx="4" fill="#FBF8F1" stroke="#CDBF9E" stroke-width="1.2"></rect>
-<text x="30" y="293" font-size="11.5" font-weight="600" fill="#8E5A14">RX 安裝角：roll、heading</text>
-<path d="M204 290 L215 290" stroke="#4A5B70" stroke-width="1.3"></path>
-<path d="M209 286 L216 290 L209 294" fill="none" stroke="#4A5B70" stroke-width="1.3"></path>
-<rect x="20" y="308" width="184" height="28" rx="4" fill="#FBF8F1" stroke="#CDBF9E" stroke-width="1.2"></rect>
-<text x="30" y="325" font-size="11.5" font-weight="600" fill="#06172E">TX、RX 相對位置</text>
-<path d="M204 322 L215 322" stroke="#4A5B70" stroke-width="1.3"></path>
-<path d="M209 318 L216 322 L209 326" fill="none" stroke="#4A5B70" stroke-width="1.3"></path>
-<text x="20" y="366" font-size="10.5" fill="#4A5B70">註：TX 的 roll、RX 的 pitch</text>
-<text x="20" y="382" font-size="10.5" fill="#4A5B70">是繞陣列自身長軸轉動，</text>
-<text x="20" y="398" font-size="10.5" fill="#4A5B70">幾乎不改變圓錐。</text>
-<rect x="20" y="469" width="184" height="26" rx="4" fill="#FBF8F1" stroke="#CDBF9E" stroke-width="1.2"></rect>
-<text x="30" y="486" font-size="11.5" font-weight="600" fill="#06172E">水平 lever arm（X／Y）</text>
-<path d="M204 482 L225 482" stroke="#4A5B70" stroke-width="1.3"></path>
-<path d="M219 478 L226 482 L219 486" fill="none" stroke="#4A5B70" stroke-width="1.3"></path>
-<path d="M498 116 L515 116" stroke="#4A5B70" stroke-width="1.3"></path>
-<path d="M509 112 L516 116 L509 120" fill="none" stroke="#4A5B70" stroke-width="1.3"></path>
-<text x="522" y="110" font-size="11.5" fill="#06172E">全條帶水深偏移</text>
-<text x="522" y="130" font-size="11.5" fill="#06172E">隨船運動同步的波紋</text>
-<path d="M498 192 L515 192" stroke="#CDBF9E" stroke-width="1.3"></path>
-<path d="M509 188 L516 192 L509 196" fill="none" stroke="#CDBF9E" stroke-width="1.3"></path>
-<text x="522" y="186" font-size="11.5" fill="#4A5B70">表面聲速錯（非安裝參數）：</text>
-<text x="522" y="206" font-size="11.5" fill="#4A5B70">外側左右對稱彎曲</text>
-<path d="M498 290 L515 290" stroke="#4A5B70" stroke-width="1.3"></path>
-<path d="M509 286 L516 290 L509 294" fill="none" stroke="#4A5B70" stroke-width="1.3"></path>
-<text x="522" y="262" font-size="11.5" fill="#06172E">條帶一邊高一邊低（roll）</text>
-<text x="522" y="282" font-size="11.5" fill="#06172E">往返測線前後錯開（pitch）</text>
-<text x="522" y="302" font-size="11.5" fill="#06172E">條帶歪斜（相對 heading）</text>
-<text x="522" y="322" font-size="11.5" fill="#06172E">扇區交界錯位、階差</text>
-<path d="M498 397 L515 397" stroke="#0B7068" stroke-width="1.3"></path>
-<path d="M509 393 L516 397 L509 401" fill="none" stroke="#0B7068" stroke-width="1.3"></path>
-<text x="522" y="384" font-size="11.5" fill="#0B7068">不產生新誤差，但把①–③</text>
-<text x="522" y="404" font-size="11.5" fill="#0B7068">的誤差帶進整條聲線</text>
-<path d="M498 482 L515 482" stroke="#4A5B70" stroke-width="1.3"></path>
-<path d="M509 478 L516 482 L509 486" fill="none" stroke="#4A5B70" stroke-width="1.3"></path>
-<text x="522" y="478" font-size="11.5" fill="#06172E">平面位置偏移</text>
-<text x="522" y="498" font-size="11.5" fill="#06172E">（純平移）</text>
-<rect x="20" y="528" width="680" height="58" rx="4" fill="#FBF8F1" stroke="#0B7068" stroke-width="1.4"></rect>
-<text x="36" y="552" font-size="12" font-weight="700" fill="#0B7068">①③ 在 ray tracing 之前進入：誤差會跟著聲線折射，修正參數後要從原始 range／angle 重算</text>
-<text x="36" y="574" font-size="12" fill="#4A5B70">⑤ 在 ray tracing 之後才加上：只是平移</text>
+<svg class="nhf2" viewBox="0 0 720 548" role="img" aria-label="動態示意：分體式 MBES 的 TX、RX 各自設定 offset 與 roll、pitch、heading。依序播放五種情況：設定正確時算出的聲線與實際重合；RX roll 設錯時跨航向起始角偏移，條帶一側變深一側變淺；TX roll 設錯時發射圓錐不變，落點幾乎不動；TX pitch 設錯時整條帶沿航向平行前移；TX Z 設錯時 ray tracing 起始深度錯，整條帶一起變深。上方列出原廠容許誤差：RX roll ±0.02°、TX pitch ±0.05°、heading ±0.05°、Z ±0.005 m，TX roll 與 RX pitch 放寬到 ±0.20°。" style="width: 100%; height: auto; display: block; font-family: 'Noto Sans TC', sans-serif">
+<style>.nhf2 .nhf2-sc{opacity:0}.nhf2 .nhf2-s1{opacity:1}.nhf2 .nhf2-draw{stroke-dasharray:var(--l);stroke-dashoffset:0}@keyframes nhf2-ks0{0%{opacity:0}2%{opacity:1}18.00%{opacity:1}20.00%{opacity:0}100%{opacity:0}}@keyframes nhf2-kd0{0%{stroke-dashoffset:var(--l)}2.00%{stroke-dashoffset:var(--l)}8.00%{stroke-dashoffset:0}100%{stroke-dashoffset:0}}@keyframes nhf2-kp0{0%{opacity:0}8.00%{opacity:0}10.00%{opacity:1}100%{opacity:1}}.nhf2 .nhf2-s0{animation:nhf2-ks0 20s linear infinite both}.nhf2 .nhf2-d0{animation:nhf2-kd0 20s linear infinite both}.nhf2 .nhf2-p0{animation:nhf2-kp0 20s linear infinite both}@keyframes nhf2-ks1{0%{opacity:0}20.00%{opacity:0}22.00%{opacity:1}38.00%{opacity:1}40.00%{opacity:0}100%{opacity:0}}@keyframes nhf2-kd1{0%{stroke-dashoffset:var(--l)}22.00%{stroke-dashoffset:var(--l)}28.00%{stroke-dashoffset:0}100%{stroke-dashoffset:0}}@keyframes nhf2-kp1{0%{opacity:0}28.00%{opacity:0}30.00%{opacity:1}100%{opacity:1}}.nhf2 .nhf2-s1{animation:nhf2-ks1 20s linear infinite both}.nhf2 .nhf2-d1{animation:nhf2-kd1 20s linear infinite both}.nhf2 .nhf2-p1{animation:nhf2-kp1 20s linear infinite both}@keyframes nhf2-ks2{0%{opacity:0}40.00%{opacity:0}42.00%{opacity:1}58.00%{opacity:1}60.00%{opacity:0}100%{opacity:0}}@keyframes nhf2-kd2{0%{stroke-dashoffset:var(--l)}42.00%{stroke-dashoffset:var(--l)}48.00%{stroke-dashoffset:0}100%{stroke-dashoffset:0}}@keyframes nhf2-kp2{0%{opacity:0}48.00%{opacity:0}50.00%{opacity:1}100%{opacity:1}}.nhf2 .nhf2-s2{animation:nhf2-ks2 20s linear infinite both}.nhf2 .nhf2-d2{animation:nhf2-kd2 20s linear infinite both}.nhf2 .nhf2-p2{animation:nhf2-kp2 20s linear infinite both}@keyframes nhf2-ks3{0%{opacity:0}60.00%{opacity:0}62.00%{opacity:1}78.00%{opacity:1}80.00%{opacity:0}100%{opacity:0}}@keyframes nhf2-kd3{0%{stroke-dashoffset:var(--l)}62.00%{stroke-dashoffset:var(--l)}68.00%{stroke-dashoffset:0}100%{stroke-dashoffset:0}}@keyframes nhf2-kp3{0%{opacity:0}68.00%{opacity:0}70.00%{opacity:1}100%{opacity:1}}.nhf2 .nhf2-s3{animation:nhf2-ks3 20s linear infinite both}.nhf2 .nhf2-d3{animation:nhf2-kd3 20s linear infinite both}.nhf2 .nhf2-p3{animation:nhf2-kp3 20s linear infinite both}@keyframes nhf2-ks4{0%{opacity:0}80.00%{opacity:0}82.00%{opacity:1}98.00%{opacity:1}100.00%{opacity:0}100%{opacity:0}}@keyframes nhf2-kd4{0%{stroke-dashoffset:var(--l)}82.00%{stroke-dashoffset:var(--l)}88.00%{stroke-dashoffset:0}100%{stroke-dashoffset:0}}@keyframes nhf2-kp4{0%{opacity:0}88.00%{opacity:0}90.00%{opacity:1}100%{opacity:1}}.nhf2 .nhf2-s4{animation:nhf2-ks4 20s linear infinite both}.nhf2 .nhf2-d4{animation:nhf2-kd4 20s linear infinite both}.nhf2 .nhf2-p4{animation:nhf2-kp4 20s linear infinite both}@media (prefers-reduced-motion: reduce){.nhf2 .nhf2-sc,.nhf2 .nhf2-draw,.nhf2 .nhf2-dot{animation:none!important}.nhf2 .nhf2-sc{opacity:0}.nhf2 .nhf2-s1{opacity:1}.nhf2 .nhf2-draw{stroke-dashoffset:0}.nhf2 .nhf2-dot{opacity:1}}</style>
+<defs>
+<linearGradient id="nhf2-sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#DCEFF6"></stop><stop offset="0.096" stop-color="#DCEFF6"></stop><stop offset="0.673" stop-color="#BFDDE7"></stop><stop offset="1" stop-color="#A9D0DD"></stop></linearGradient>
+<clipPath id="nhf2-clipA"><rect x="20" y="188" width="480" height="236"></rect></clipPath>
+<clipPath id="nhf2-clipB"><rect x="512" y="188" width="188" height="236"></rect></clipPath>
+</defs>
+<text x="20.0" y="24.0" font-size="15" font-weight="700" fill="#06172E">安裝設定錯一點，ray tracing 從起點就走錯</text>
+<text x="20.0" y="44.0" font-size="12" fill="#4A5B70">TX、RX 各自設定 offset（X／Y／Z）與 roll／pitch／heading 的分體式</text>
+<text x="20.0" y="70.0" font-size="11.5" font-weight="700" fill="#0F3D6B">船底仰視（0.7° 型比例）</text>
+<rect x="92.0" y="104.0" width="69.2" height="24.1" rx="2" fill="#1A4682"></rect>
+<rect x="56.8" y="81.5" width="24.1" height="69.2" rx="2" fill="#8E5A14"></rect>
+<text x="126.6" y="120.1" font-size="11" font-weight="700" text-anchor="middle" fill="#FFFFFF">TX</text>
+<text x="68.9" y="120.1" font-size="11" font-weight="700" text-anchor="middle" fill="#FFFFFF">RX</text>
+<path d="M98.0 86 L191.2 86 M186.2 82 L191.2 86 L186.2 90" fill="none" stroke="#0F3D6B" stroke-width="1.3"></path>
+<text x="195.2" y="90.0" font-size="10.5" fill="#4A5B70">船艏</text>
+<text x="20.0" y="160.0" font-size="10.5" fill="#4A5B70">TX、RX 各 407 × 142 mm，</text>
+<text x="20.0" y="174.0" font-size="10.5" fill="#4A5B70">各自量測 X／Y／Z 與 R／P／H</text>
+<text x="214.0" y="70.0" font-size="11.5" font-weight="700" fill="#0F3D6B">安裝參數 TX、RX 各一組（表內為原廠容許誤差）</text>
+<text x="307.0" y="90.0" font-size="11" font-weight="600" text-anchor="middle" fill="#4A5B70">X／Y</text>
+<text x="393.0" y="90.0" font-size="11" font-weight="600" text-anchor="middle" fill="#4A5B70">Z</text>
+<text x="479.0" y="90.0" font-size="11" font-weight="600" text-anchor="middle" fill="#4A5B70">Roll</text>
+<text x="565.0" y="90.0" font-size="11" font-weight="600" text-anchor="middle" fill="#4A5B70">Pitch</text>
+<text x="651.0" y="90.0" font-size="11" font-weight="600" text-anchor="middle" fill="#4A5B70">Heading</text>
+<rect x="214" y="97" width="480" height="22" rx="3" fill="#FBF8F1"></rect>
+<text x="224.0" y="112.0" font-size="12" font-weight="700" fill="#1A4682">TX</text>
+<text x="307.0" y="112.0" font-size="11" text-anchor="middle" fill="#4A5B70">±0.02 m</text>
+<text x="393.0" y="112.0" font-size="11.5" font-weight="700" text-anchor="middle" fill="#06172E">±0.005 m</text>
+<text x="479.0" y="112.0" font-size="11" text-anchor="middle" fill="#4A5B70">±0.20°</text>
+<text x="565.0" y="112.0" font-size="11.5" font-weight="700" text-anchor="middle" fill="#06172E">±0.05°</text>
+<text x="651.0" y="112.0" font-size="11.5" font-weight="700" text-anchor="middle" fill="#06172E">±0.05°</text>
+<rect x="214" y="121" width="480" height="22" rx="3" fill="#FBF8F1"></rect>
+<text x="224.0" y="136.0" font-size="12" font-weight="700" fill="#8E5A14">RX</text>
+<text x="307.0" y="136.0" font-size="11" text-anchor="middle" fill="#4A5B70">±0.02 m</text>
+<text x="393.0" y="136.0" font-size="11.5" font-weight="700" text-anchor="middle" fill="#06172E">±0.005 m</text>
+<text x="479.0" y="136.0" font-size="11.5" font-weight="700" text-anchor="middle" fill="#06172E">±0.02°</text>
+<text x="565.0" y="136.0" font-size="11" text-anchor="middle" fill="#4A5B70">±0.20°</text>
+<text x="651.0" y="136.0" font-size="11.5" font-weight="700" text-anchor="middle" fill="#06172E">±0.05°（相對）</text>
+<rect x="214.0" y="152" width="92" height="22" rx="11" fill="#FBF8F1" stroke="#CDBF9E"></rect>
+<text x="260.0" y="167.0" font-size="11" text-anchor="middle" fill="#4A5B70">① 設定正確</text>
+<rect x="312.5" y="152" width="92" height="22" rx="11" fill="#FBF8F1" stroke="#CDBF9E"></rect>
+<text x="358.5" y="167.0" font-size="11" text-anchor="middle" fill="#4A5B70">② RX roll 設錯</text>
+<rect x="411.0" y="152" width="92" height="22" rx="11" fill="#FBF8F1" stroke="#CDBF9E"></rect>
+<text x="457.0" y="167.0" font-size="11" text-anchor="middle" fill="#4A5B70">③ TX roll 設錯</text>
+<rect x="509.5" y="152" width="92" height="22" rx="11" fill="#FBF8F1" stroke="#CDBF9E"></rect>
+<text x="555.5" y="167.0" font-size="11" text-anchor="middle" fill="#4A5B70">④ TX pitch 設錯</text>
+<rect x="608.0" y="152" width="92" height="22" rx="11" fill="#FBF8F1" stroke="#CDBF9E"></rect>
+<text x="654.0" y="167.0" font-size="11" text-anchor="middle" fill="#4A5B70">⑤ TX Z 設錯</text>
+<rect x="20" y="188" width="480" height="236" rx="4" fill="url(#nhf2-sea)"></rect>
+<rect x="20" y="368.0" width="480" height="56.0" fill="#CDBF9E"></rect>
+<line x1="20" y1="368.0" x2="500" y2="368.0" stroke="#8C7A5B" stroke-width="1.5"></line>
+<rect x="20" y="188" width="480" height="40.0" fill="#FBF8F1"></rect>
+<line x1="20" y1="228.0" x2="500" y2="228.0" stroke="#6E7F91" stroke-width="1.2"></line>
+<text x="28.0" y="204.0" font-size="11.5" font-weight="700" fill="#0F3D6B">跨航向剖面（由船艉向前看）</text>
+<rect x="512" y="188" width="188" height="236" rx="4" fill="url(#nhf2-sea)"></rect>
+<rect x="512" y="368.0" width="188" height="56.0" fill="#CDBF9E"></rect>
+<line x1="512" y1="368.0" x2="700" y2="368.0" stroke="#8C7A5B" stroke-width="1.5"></line>
+<rect x="512" y="188" width="188" height="40.0" fill="#FBF8F1"></rect>
+<line x1="512" y1="228.0" x2="700" y2="228.0" stroke="#6E7F91" stroke-width="1.2"></line>
+<text x="520.0" y="204.0" font-size="11.5" font-weight="700" fill="#0F3D6B">沿航向剖面（右舷側看）</text>
+<text x="492.0" y="204.0" font-size="10.5" text-anchor="end" fill="#4A5B70">誤差放大示意</text>
+<text x="28.0" y="272.8" font-size="10.5" fill="#4A5B70">溫躍層：聲速 1545 → 1528 m/s</text>
+<text x="492.0" y="394.0" font-size="10.5" text-anchor="end" fill="#06172E">海床（水深 50 m）</text>
+<path d="M234.0 214.0 L236.0 232.0 Q238.0 239.2 250.0 239.2 L270.0 239.2 Q282.0 239.2 284.0 232.0 L286.0 214.0 Z" fill="#FBF8F1" stroke="#4A5B70" stroke-width="1.4"></path>
+<rect x="247.0" y="237.7" width="26" height="4" fill="#8E5A14"></rect>
+<rect x="275.0" y="236.7" width="5" height="5" fill="#1A4682"></rect>
+<text x="230.0" y="241.2" font-size="10" font-weight="700" text-anchor="end" fill="#8E5A14">RX</text>
+<text x="290.0" y="241.2" font-size="10" font-weight="700" fill="#1A4682">TX</text>
+<path d="M530.0 214.0 L534.0 239.2 L654.0 239.2 Q674.0 239.2 686.0 214.0 L530.0 214.0 Z" fill="#FBF8F1" stroke="#4A5B70" stroke-width="1.4"></path>
+<rect x="577.0" y="237.7" width="26" height="4" fill="#1A4682"></rect>
+<rect x="568.0" y="236.7" width="5" height="5" fill="#8E5A14"></rect>
+<text x="607.0" y="251.2" font-size="10" font-weight="700" fill="#1A4682">TX</text>
+<text x="690.0" y="210.0" font-size="10.5" text-anchor="end" fill="#4A5B70">船艏 →</text>
+<g clip-path="url(#nhf2-clipA)">
+<path d="M260.0 239.2 L253.9 242.7 L247.7 246.3 L241.6 249.8 L235.5 253.4 L229.4 256.9 L223.3 260.5 L217.3 264.0 L211.2 267.5 L205.2 271.1 L199.1 274.6 L193.1 278.2 L187.1 281.7 L181.1 285.2 L175.1 288.8 L169.1 292.3 L163.1 295.9 L157.2 299.4 L151.2 303.0 L145.3 306.5 L139.3 310.0 L133.4 313.6 L127.5 317.1 L121.6 320.7 L115.7 324.2 L109.9 327.8 L104.0 331.3 L98.1 334.8 L92.2 338.4 L86.4 341.9 L80.5 345.5 L74.6 349.0 L68.7 352.5 L62.9 356.1 L57.0 359.6 L51.1 363.2 L45.3 366.7 L43.1 368.0" fill="none" stroke="#6E7F91" stroke-width="1.1" opacity="0.75"></path>
+<circle cx="43.1" cy="368.0" r="2.4" fill="#6E7F91"></circle>
+<path d="M260.0 239.2 L256.5 242.7 L252.9 246.3 L249.4 249.8 L245.8 253.4 L242.3 256.9 L238.8 260.5 L235.3 264.0 L231.7 267.5 L228.2 271.1 L224.7 274.6 L221.2 278.2 L217.7 281.7 L214.2 285.2 L210.7 288.8 L207.2 292.3 L203.7 295.9 L200.2 299.4 L196.7 303.0 L193.2 306.5 L189.8 310.0 L186.3 313.6 L182.8 317.1 L179.3 320.7 L175.9 324.2 L172.4 327.8 L168.9 331.3 L165.5 334.8 L162.0 338.4 L158.5 341.9 L155.1 345.5 L151.6 349.0 L148.2 352.5 L144.7 356.1 L141.2 359.6 L137.8 363.2 L134.3 366.7 L133.0 368.0" fill="none" stroke="#6E7F91" stroke-width="1.1" opacity="0.75"></path>
+<circle cx="133.0" cy="368.0" r="2.4" fill="#6E7F91"></circle>
+<path d="M260.0 239.2 L258.0 242.7 L255.9 246.3 L253.9 249.8 L251.8 253.4 L249.8 256.9 L247.7 260.5 L245.7 264.0 L243.7 267.5 L241.6 271.1 L239.6 274.6 L237.6 278.2 L235.5 281.7 L233.5 285.2 L231.5 288.8 L229.5 292.3 L227.4 295.9 L225.4 299.4 L223.4 303.0 L221.4 306.5 L219.3 310.0 L217.3 313.6 L215.3 317.1 L213.3 320.7 L211.3 324.2 L209.2 327.8 L207.2 331.3 L205.2 334.8 L203.2 338.4 L201.2 341.9 L199.2 345.5 L197.2 349.0 L195.1 352.5 L193.1 356.1 L191.1 359.6 L189.1 363.2 L187.1 366.7 L186.4 368.0" fill="none" stroke="#6E7F91" stroke-width="1.1" opacity="0.75"></path>
+<circle cx="186.4" cy="368.0" r="2.4" fill="#6E7F91"></circle>
+<path d="M260.0 239.2 L260.0 242.7 L260.0 246.3 L260.0 249.8 L260.0 253.4 L260.0 256.9 L260.0 260.5 L260.0 264.0 L260.0 267.5 L260.0 271.1 L260.0 274.6 L260.0 278.2 L260.0 281.7 L260.0 285.2 L260.0 288.8 L260.0 292.3 L260.0 295.9 L260.0 299.4 L260.0 303.0 L260.0 306.5 L260.0 310.0 L260.0 313.6 L260.0 317.1 L260.0 320.7 L260.0 324.2 L260.0 327.8 L260.0 331.3 L260.0 334.8 L260.0 338.4 L260.0 341.9 L260.0 345.5 L260.0 349.0 L260.0 352.5 L260.0 356.1 L260.0 359.6 L260.0 363.2 L260.0 366.7 L260.0 368.0" fill="none" stroke="#6E7F91" stroke-width="1.1" opacity="0.75"></path>
+<circle cx="260.0" cy="368.0" r="2.4" fill="#6E7F91"></circle>
+<path d="M260.0 239.2 L262.0 242.7 L264.1 246.3 L266.1 249.8 L268.2 253.4 L270.2 256.9 L272.3 260.5 L274.3 264.0 L276.3 267.5 L278.4 271.1 L280.4 274.6 L282.4 278.2 L284.5 281.7 L286.5 285.2 L288.5 288.8 L290.5 292.3 L292.6 295.9 L294.6 299.4 L296.6 303.0 L298.6 306.5 L300.7 310.0 L302.7 313.6 L304.7 317.1 L306.7 320.7 L308.7 324.2 L310.8 327.8 L312.8 331.3 L314.8 334.8 L316.8 338.4 L318.8 341.9 L320.8 345.5 L322.8 349.0 L324.9 352.5 L326.9 356.1 L328.9 359.6 L330.9 363.2 L332.9 366.7 L333.6 368.0" fill="none" stroke="#6E7F91" stroke-width="1.1" opacity="0.75"></path>
+<circle cx="333.6" cy="368.0" r="2.4" fill="#6E7F91"></circle>
+<path d="M260.0 239.2 L263.5 242.7 L267.1 246.3 L270.6 249.8 L274.2 253.4 L277.7 256.9 L281.2 260.5 L284.7 264.0 L288.3 267.5 L291.8 271.1 L295.3 274.6 L298.8 278.2 L302.3 281.7 L305.8 285.2 L309.3 288.8 L312.8 292.3 L316.3 295.9 L319.8 299.4 L323.3 303.0 L326.8 306.5 L330.2 310.0 L333.7 313.6 L337.2 317.1 L340.7 320.7 L344.1 324.2 L347.6 327.8 L351.1 331.3 L354.5 334.8 L358.0 338.4 L361.5 341.9 L364.9 345.5 L368.4 349.0 L371.8 352.5 L375.3 356.1 L378.8 359.6 L382.2 363.2 L385.7 366.7 L387.0 368.0" fill="none" stroke="#6E7F91" stroke-width="1.1" opacity="0.75"></path>
+<circle cx="387.0" cy="368.0" r="2.4" fill="#6E7F91"></circle>
+<path d="M260.0 239.2 L266.1 242.7 L272.3 246.3 L278.4 249.8 L284.5 253.4 L290.6 256.9 L296.7 260.5 L302.7 264.0 L308.8 267.5 L314.8 271.1 L320.9 274.6 L326.9 278.2 L332.9 281.7 L338.9 285.2 L344.9 288.8 L350.9 292.3 L356.9 295.9 L362.8 299.4 L368.8 303.0 L374.7 306.5 L380.7 310.0 L386.6 313.6 L392.5 317.1 L398.4 320.7 L404.3 324.2 L410.1 327.8 L416.0 331.3 L421.9 334.8 L427.8 338.4 L433.6 341.9 L439.5 345.5 L445.4 349.0 L451.3 352.5 L457.1 356.1 L463.0 359.6 L468.9 363.2 L474.7 366.7 L476.9 368.0" fill="none" stroke="#6E7F91" stroke-width="1.1" opacity="0.75"></path>
+<circle cx="476.9" cy="368.0" r="2.4" fill="#6E7F91"></circle>
+</g>
+<g clip-path="url(#nhf2-clipB)">
+<path d="M590.0 239.2 L590.0 242.7 L590.0 246.3 L590.0 249.8 L590.0 253.4 L590.0 256.9 L590.0 260.5 L590.0 264.0 L590.0 267.5 L590.0 271.1 L590.0 274.6 L590.0 278.2 L590.0 281.7 L590.0 285.2 L590.0 288.8 L590.0 292.3 L590.0 295.9 L590.0 299.4 L590.0 303.0 L590.0 306.5 L590.0 310.0 L590.0 313.6 L590.0 317.1 L590.0 320.7 L590.0 324.2 L590.0 327.8 L590.0 331.3 L590.0 334.8 L590.0 338.4 L590.0 341.9 L590.0 345.5 L590.0 349.0 L590.0 352.5 L590.0 356.1 L590.0 359.6 L590.0 363.2 L590.0 366.7 L590.0 368.0" fill="none" stroke="#6E7F91" stroke-width="1.1" opacity="0.75"></path>
+<circle cx="590.0" cy="368.0" r="2.4" fill="#6E7F91"></circle>
+</g>
+<text x="596.0" y="362.0" font-size="9.5" fill="#4A5B70">各波束投影重疊</text>
+<line x1="170" y1="412.0" x2="192" y2="412.0" stroke="#6E7F91" stroke-width="1.2"></line>
+<text x="197.0" y="416.0" font-size="10.5" fill="#06172E">實際聲線</text>
+<line x1="260" y1="412.0" x2="282" y2="412.0" stroke="#C2410C" stroke-width="2.2"></line>
+<text x="287.0" y="416.0" font-size="10.5" fill="#06172E">依設定算出的聲線</text>
+<circle cx="392" cy="412.0" r="3.4" fill="#C2410C"></circle>
+<text x="400.0" y="416.0" font-size="10.5" fill="#06172E">算出的落點</text>
+<rect x="20" y="446" width="680" height="90" rx="4" fill="#FBF8F1" stroke="#CDBF9E"></rect>
+<g class="nhf2-sc nhf2-s0">
+<rect x="214.0" y="152" width="92" height="22" rx="11" fill="#0B7068"></rect><text x="260.0" y="167" font-size="11" font-weight="700" fill="#FFFFFF" text-anchor="middle">① 設定正確</text>
+
+<g clip-path="url(#nhf2-clipA)">
+<path class="nhf2-draw nhf2-d0" style="--l:252.2" d="M260.0 239.2 L253.9 242.7 L247.7 246.3 L241.6 249.8 L235.5 253.4 L229.4 256.9 L223.3 260.5 L217.3 264.0 L211.2 267.5 L205.2 271.1 L199.1 274.6 L193.1 278.2 L187.1 281.7 L181.1 285.2 L175.1 288.8 L169.1 292.3 L163.1 295.9 L157.2 299.4 L151.2 303.0 L145.3 306.5 L139.3 310.0 L133.4 313.6 L127.5 317.1 L121.6 320.7 L115.7 324.2 L109.9 327.8 L104.0 331.3 L98.1 334.8 L92.2 338.4 L86.4 341.9 L80.5 345.5 L74.6 349.0 L68.7 352.5 L62.9 356.1 L57.0 359.6 L51.1 363.2 L45.3 366.7 L43.1 368.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d0" style="--l:180.9" d="M260.0 239.2 L256.5 242.7 L252.9 246.3 L249.4 249.8 L245.8 253.4 L242.3 256.9 L238.8 260.5 L235.3 264.0 L231.7 267.5 L228.2 271.1 L224.7 274.6 L221.2 278.2 L217.7 281.7 L214.2 285.2 L210.7 288.8 L207.2 292.3 L203.7 295.9 L200.2 299.4 L196.7 303.0 L193.2 306.5 L189.8 310.0 L186.3 313.6 L182.8 317.1 L179.3 320.7 L175.9 324.2 L172.4 327.8 L168.9 331.3 L165.5 334.8 L162.0 338.4 L158.5 341.9 L155.1 345.5 L151.6 349.0 L148.2 352.5 L144.7 356.1 L141.2 359.6 L137.8 363.2 L134.3 366.7 L133.0 368.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d0" style="--l:148.4" d="M260.0 239.2 L258.0 242.7 L255.9 246.3 L253.9 249.8 L251.8 253.4 L249.8 256.9 L247.7 260.5 L245.7 264.0 L243.7 267.5 L241.6 271.1 L239.6 274.6 L237.6 278.2 L235.5 281.7 L233.5 285.2 L231.5 288.8 L229.5 292.3 L227.4 295.9 L225.4 299.4 L223.4 303.0 L221.4 306.5 L219.3 310.0 L217.3 313.6 L215.3 317.1 L213.3 320.7 L211.3 324.2 L209.2 327.8 L207.2 331.3 L205.2 334.8 L203.2 338.4 L201.2 341.9 L199.2 345.5 L197.2 349.0 L195.1 352.5 L193.1 356.1 L191.1 359.6 L189.1 363.2 L187.1 366.7 L186.4 368.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d0" style="--l:128.8" d="M260.0 239.2 L260.0 242.7 L260.0 246.3 L260.0 249.8 L260.0 253.4 L260.0 256.9 L260.0 260.5 L260.0 264.0 L260.0 267.5 L260.0 271.1 L260.0 274.6 L260.0 278.2 L260.0 281.7 L260.0 285.2 L260.0 288.8 L260.0 292.3 L260.0 295.9 L260.0 299.4 L260.0 303.0 L260.0 306.5 L260.0 310.0 L260.0 313.6 L260.0 317.1 L260.0 320.7 L260.0 324.2 L260.0 327.8 L260.0 331.3 L260.0 334.8 L260.0 338.4 L260.0 341.9 L260.0 345.5 L260.0 349.0 L260.0 352.5 L260.0 356.1 L260.0 359.6 L260.0 363.2 L260.0 366.7 L260.0 368.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d0" style="--l:148.4" d="M260.0 239.2 L262.0 242.7 L264.1 246.3 L266.1 249.8 L268.2 253.4 L270.2 256.9 L272.3 260.5 L274.3 264.0 L276.3 267.5 L278.4 271.1 L280.4 274.6 L282.4 278.2 L284.5 281.7 L286.5 285.2 L288.5 288.8 L290.5 292.3 L292.6 295.9 L294.6 299.4 L296.6 303.0 L298.6 306.5 L300.7 310.0 L302.7 313.6 L304.7 317.1 L306.7 320.7 L308.7 324.2 L310.8 327.8 L312.8 331.3 L314.8 334.8 L316.8 338.4 L318.8 341.9 L320.8 345.5 L322.8 349.0 L324.9 352.5 L326.9 356.1 L328.9 359.6 L330.9 363.2 L332.9 366.7 L333.6 368.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d0" style="--l:180.9" d="M260.0 239.2 L263.5 242.7 L267.1 246.3 L270.6 249.8 L274.2 253.4 L277.7 256.9 L281.2 260.5 L284.7 264.0 L288.3 267.5 L291.8 271.1 L295.3 274.6 L298.8 278.2 L302.3 281.7 L305.8 285.2 L309.3 288.8 L312.8 292.3 L316.3 295.9 L319.8 299.4 L323.3 303.0 L326.8 306.5 L330.2 310.0 L333.7 313.6 L337.2 317.1 L340.7 320.7 L344.1 324.2 L347.6 327.8 L351.1 331.3 L354.5 334.8 L358.0 338.4 L361.5 341.9 L364.9 345.5 L368.4 349.0 L371.8 352.5 L375.3 356.1 L378.8 359.6 L382.2 363.2 L385.7 366.7 L387.0 368.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d0" style="--l:252.2" d="M260.0 239.2 L266.1 242.7 L272.3 246.3 L278.4 249.8 L284.5 253.4 L290.6 256.9 L296.7 260.5 L302.7 264.0 L308.8 267.5 L314.8 271.1 L320.9 274.6 L326.9 278.2 L332.9 281.7 L338.9 285.2 L344.9 288.8 L350.9 292.3 L356.9 295.9 L362.8 299.4 L368.8 303.0 L374.7 306.5 L380.7 310.0 L386.6 313.6 L392.5 317.1 L398.4 320.7 L404.3 324.2 L410.1 327.8 L416.0 331.3 L421.9 334.8 L427.8 338.4 L433.6 341.9 L439.5 345.5 L445.4 349.0 L451.3 352.5 L457.1 356.1 L463.0 359.6 L468.9 363.2 L474.7 366.7 L476.9 368.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<circle class="nhf2-dot nhf2-p0" cx="43.1" cy="368.0" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p0" cx="133.0" cy="368.0" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p0" cx="186.4" cy="368.0" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p0" cx="260.0" cy="368.0" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p0" cx="333.6" cy="368.0" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p0" cx="387.0" cy="368.0" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p0" cx="476.9" cy="368.0" r="3.4" fill="#C2410C"></circle>
+
+</g><g clip-path="url(#nhf2-clipB)">
+<path class="nhf2-draw nhf2-d0" style="--l:128.8" d="M590.0 239.2 L590.0 242.7 L590.0 246.3 L590.0 249.8 L590.0 253.4 L590.0 256.9 L590.0 260.5 L590.0 264.0 L590.0 267.5 L590.0 271.1 L590.0 274.6 L590.0 278.2 L590.0 281.7 L590.0 285.2 L590.0 288.8 L590.0 292.3 L590.0 295.9 L590.0 299.4 L590.0 303.0 L590.0 306.5 L590.0 310.0 L590.0 313.6 L590.0 317.1 L590.0 320.7 L590.0 324.2 L590.0 327.8 L590.0 331.3 L590.0 334.8 L590.0 338.4 L590.0 341.9 L590.0 345.5 L590.0 349.0 L590.0 352.5 L590.0 356.1 L590.0 359.6 L590.0 363.2 L590.0 366.7 L590.0 368.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d0" style="--l:128.8" d="M590.0 239.2 L590.0 242.7 L590.0 246.3 L590.0 249.8 L590.0 253.4 L590.0 256.9 L590.0 260.5 L590.0 264.0 L590.0 267.5 L590.0 271.1 L590.0 274.6 L590.0 278.2 L590.0 281.7 L590.0 285.2 L590.0 288.8 L590.0 292.3 L590.0 295.9 L590.0 299.4 L590.0 303.0 L590.0 306.5 L590.0 310.0 L590.0 313.6 L590.0 317.1 L590.0 320.7 L590.0 324.2 L590.0 327.8 L590.0 331.3 L590.0 334.8 L590.0 338.4 L590.0 341.9 L590.0 345.5 L590.0 349.0 L590.0 352.5 L590.0 356.1 L590.0 359.6 L590.0 363.2 L590.0 366.7 L590.0 368.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<circle class="nhf2-dot nhf2-p0" cx="590.0" cy="368.0" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p0" cx="590.0" cy="368.0" r="3.4" fill="#C2410C"></circle>
+
+</g>
+<text x="36" y="470" font-size="13" font-weight="700" fill="#0B7068">① 設定正確</text>
+<text x="36" y="492" font-size="12" fill="#06172E">依設定算出的起始深度與起始向量都正確，算出的聲線與實際聲線重合，落點都在海床上。</text>
+</g>
+<g class="nhf2-sc nhf2-s1">
+<rect x="312.5" y="152" width="92" height="22" rx="11" fill="#C2410C"></rect><text x="358.5" y="167" font-size="11" font-weight="700" fill="#FFFFFF" text-anchor="middle">② RX roll 設錯</text>
+<rect x="439.0" y="121.0" width="80" height="22" rx="3" fill="none" stroke="#C2410C" stroke-width="2"></rect>
+<g clip-path="url(#nhf2-clipA)">
+<path class="nhf2-draw nhf2-d1" style="--l:252.1" d="M260.0 239.2 L254.2 243.4 L248.5 247.6 L242.8 251.7 L237.0 255.9 L231.3 260.1 L225.6 264.3 L219.9 268.5 L214.2 272.6 L208.5 276.8 L202.9 281.0 L197.2 285.2 L191.5 289.4 L185.9 293.5 L180.3 297.7 L174.6 301.9 L169.0 306.1 L163.4 310.3 L157.8 314.4 L152.2 318.6 L146.6 322.8 L141.0 327.0 L135.5 331.2 L129.9 335.3 L124.3 339.5 L118.7 343.7 L113.2 347.9 L107.6 352.0 L102.0 356.2 L96.5 360.4 L90.9 364.6 L85.3 368.8 L79.8 372.9 L74.2 377.1 L68.6 381.3 L63.1 385.5 L57.7 389.5" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d1" style="--l:180.8" d="M260.0 239.2 L256.8 243.1 L253.7 247.0 L250.5 250.9 L247.4 254.8 L244.2 258.7 L241.1 262.6 L238.0 266.5 L234.8 270.4 L231.7 274.3 L228.6 278.2 L225.4 282.1 L222.3 286.0 L219.2 289.9 L216.1 293.7 L212.9 297.6 L209.8 301.5 L206.7 305.4 L203.6 309.3 L200.5 313.2 L197.4 317.1 L194.3 321.0 L191.2 324.9 L188.1 328.8 L185.0 332.7 L181.9 336.6 L178.8 340.5 L175.7 344.4 L172.6 348.3 L169.5 352.2 L166.4 356.1 L163.3 360.0 L160.2 363.9 L157.1 367.8 L154.0 371.7 L150.9 375.6 L147.8 379.5 L147.1 380.4" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d1" style="--l:148.3" d="M260.0 239.2 L258.3 243.0 L256.7 246.7 L255.0 250.5 L253.3 254.2 L251.7 258.0 L250.0 261.7 L248.3 265.5 L246.7 269.2 L245.0 273.0 L243.3 276.7 L241.7 280.5 L240.0 284.3 L238.3 288.0 L236.7 291.8 L235.0 295.5 L233.4 299.3 L231.7 303.0 L230.1 306.8 L228.4 310.5 L226.7 314.3 L225.1 318.0 L223.4 321.8 L221.8 325.6 L220.1 329.3 L218.5 333.1 L216.8 336.8 L215.2 340.6 L213.5 344.3 L211.9 348.1 L210.3 351.8 L208.6 355.6 L207.0 359.3 L205.3 363.1 L203.7 366.9 L202.0 370.6 L200.4 374.4 L200.1 374.9" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d1" style="--l:128.8" d="M260.0 239.2 L260.4 242.7 L260.7 246.3 L261.1 249.8 L261.5 253.4 L261.9 256.9 L262.2 260.5 L262.6 264.0 L263.0 267.5 L263.3 271.1 L263.7 274.6 L264.1 278.2 L264.5 281.7 L264.8 285.2 L265.2 288.8 L265.6 292.3 L265.9 295.9 L266.3 299.4 L266.7 303.0 L267.0 306.5 L267.4 310.0 L267.8 313.6 L268.2 317.1 L268.5 320.7 L268.9 324.2 L269.3 327.8 L269.6 331.3 L270.0 334.8 L270.4 338.4 L270.7 341.9 L271.1 345.5 L271.5 349.0 L271.8 352.5 L272.2 356.1 L272.6 359.6 L272.9 363.2 L273.3 366.7 L273.4 367.3" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d1" style="--l:148.4" d="M260.0 239.2 L262.4 242.5 L264.8 245.9 L267.3 249.2 L269.7 252.5 L272.1 255.8 L274.5 259.2 L276.9 262.5 L279.3 265.8 L281.7 269.2 L284.1 272.5 L286.5 275.8 L288.9 279.2 L291.3 282.5 L293.7 285.8 L296.1 289.1 L298.5 292.5 L300.9 295.8 L303.3 299.1 L305.7 302.5 L308.1 305.8 L310.5 309.1 L312.9 312.4 L315.2 315.8 L317.6 319.1 L320.0 322.4 L322.4 325.8 L324.8 329.1 L327.1 332.4 L329.5 335.8 L331.9 339.1 L334.3 342.4 L336.7 345.7 L339.0 349.1 L341.4 352.4 L343.8 355.7 L346.2 359.1 L346.6 359.7" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d1" style="--l:180.9" d="M260.0 239.2 L263.9 242.4 L267.9 245.6 L271.8 248.8 L275.7 252.0 L279.6 255.1 L283.6 258.3 L287.5 261.5 L291.4 264.7 L295.3 267.9 L299.2 271.1 L303.1 274.3 L307.0 277.5 L310.9 280.6 L314.8 283.8 L318.6 287.0 L322.5 290.2 L326.4 293.4 L330.3 296.6 L334.1 299.8 L338.0 303.0 L341.8 306.1 L345.7 309.3 L349.5 312.5 L353.4 315.7 L357.2 318.9 L361.1 322.1 L364.9 325.3 L368.7 328.5 L372.6 331.6 L376.4 334.8 L380.2 338.0 L384.0 341.2 L387.9 344.4 L391.7 347.6 L395.5 350.8 L399.4 354.0 L399.7 354.2" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d1" style="--l:252.5" d="M260.0 239.2 L266.5 242.1 L273.0 245.0 L279.5 247.9 L286.0 250.8 L292.5 253.7 L299.0 256.6 L305.4 259.5 L311.8 262.4 L318.2 265.3 L324.6 268.2 L331.0 271.1 L337.4 274.1 L343.7 277.0 L350.1 279.9 L356.4 282.8 L362.7 285.7 L369.0 288.6 L375.3 291.5 L381.6 294.4 L387.8 297.3 L394.1 300.2 L400.3 303.1 L406.5 306.0 L412.7 308.9 L418.9 311.8 L425.1 314.7 L431.3 317.6 L437.4 320.5 L443.6 323.4 L449.7 326.3 L455.8 329.2 L462.0 332.1 L468.1 335.0 L474.2 338.0 L480.3 340.9 L486.4 343.8 L489.2 345.1" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<circle class="nhf2-dot nhf2-p1" cx="57.7" cy="389.5" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p1" cx="147.1" cy="380.4" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p1" cx="200.1" cy="374.9" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p1" cx="273.4" cy="367.3" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p1" cx="346.6" cy="359.7" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p1" cx="399.7" cy="354.2" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p1" cx="489.2" cy="345.1" r="3.4" fill="#C2410C"></circle>
+<path class="nhf2-dot nhf2-p1" d="M57.7 389.5 L147.1 380.4 L200.1 374.9 L273.4 367.3 L346.6 359.7 L399.7 354.2 L489.2 345.1" fill="none" stroke="#C2410C" stroke-width="1.3" stroke-dasharray="5 4"></path>
+<rect x="247.0" y="237.7" width="26" height="4" fill="none" stroke="#C2410C" stroke-width="1.6" stroke-dasharray="3 2" transform="rotate(6 260.0 239.2)"></rect><text class="nhf2-dot nhf2-p1" x="63.7" y="405.5" font-size="11" font-weight="700" fill="#C2410C" text-anchor="middle">變深</text><text class="nhf2-dot nhf2-p1" x="483.2" y="337.1" font-size="11" font-weight="700" fill="#C2410C" text-anchor="middle">變淺</text>
+</g><g clip-path="url(#nhf2-clipB)">
+<path class="nhf2-draw nhf2-d1" style="--l:128.1" d="M590.0 239.2 L590.0 242.7 L590.0 246.3 L590.0 249.8 L590.0 253.4 L590.0 256.9 L590.0 260.5 L590.0 264.0 L590.0 267.5 L590.0 271.1 L590.0 274.6 L590.0 278.2 L590.0 281.7 L590.0 285.2 L590.0 288.8 L590.0 292.3 L590.0 295.9 L590.0 299.4 L590.0 303.0 L590.0 306.5 L590.0 310.0 L590.0 313.6 L590.0 317.1 L590.0 320.7 L590.0 324.2 L590.0 327.8 L590.0 331.3 L590.0 334.8 L590.0 338.4 L590.0 341.9 L590.0 345.5 L590.0 349.0 L590.0 352.5 L590.0 356.1 L590.0 359.6 L590.0 363.2 L590.0 366.7 L590.0 367.3" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d1" style="--l:105.9" d="M590.0 239.2 L590.0 242.1 L590.0 245.0 L590.0 247.9 L590.0 250.8 L590.0 253.7 L590.0 256.6 L590.0 259.5 L590.0 262.4 L590.0 265.3 L590.0 268.2 L590.0 271.1 L590.0 274.1 L590.0 277.0 L590.0 279.9 L590.0 282.8 L590.0 285.7 L590.0 288.6 L590.0 291.5 L590.0 294.4 L590.0 297.3 L590.0 300.2 L590.0 303.1 L590.0 306.0 L590.0 308.9 L590.0 311.8 L590.0 314.7 L590.0 317.6 L590.0 320.5 L590.0 323.4 L590.0 326.3 L590.0 329.2 L590.0 332.1 L590.0 335.0 L590.0 338.0 L590.0 340.9 L590.0 343.8 L590.0 345.1" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<circle class="nhf2-dot nhf2-p1" cx="590.0" cy="367.3" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p1" cx="590.0" cy="345.1" r="3.4" fill="#C2410C"></circle>
+
+</g>
+<text x="36" y="470" font-size="13" font-weight="700" fill="#C2410C">② RX roll 設錯：跨航向的起始角偏了 δ</text>
+<text x="36" y="492" font-size="12" fill="#06172E">RX 的 roll 決定波束的左右角度。起始向量偏 δ，沿剖面折射後一側變深、一側變淺，條帶傾斜。</text>
+<text x="36" y="512" font-size="12" fill="#06172E">水深 50 m、δ = 0.5° 時，60° 波束水深差約 0.66 m；原廠容許只有 ±0.02°。</text>
+</g>
+<g class="nhf2-sc nhf2-s2">
+<rect x="411.0" y="152" width="92" height="22" rx="11" fill="#0B7068"></rect><text x="457.0" y="167" font-size="11" font-weight="700" fill="#FFFFFF" text-anchor="middle">③ TX roll 設錯</text>
+<rect x="439.0" y="97.0" width="80" height="22" rx="3" fill="none" stroke="#0B7068" stroke-width="2"></rect>
+<g clip-path="url(#nhf2-clipA)">
+<path class="nhf2-draw nhf2-d2" style="--l:252.2" d="M260.0 239.2 L253.9 242.7 L247.7 246.3 L241.6 249.8 L235.5 253.4 L229.4 256.9 L223.3 260.5 L217.3 264.0 L211.2 267.5 L205.2 271.1 L199.1 274.6 L193.1 278.2 L187.1 281.7 L181.1 285.2 L175.1 288.8 L169.1 292.3 L163.1 295.9 L157.2 299.4 L151.2 303.0 L145.3 306.5 L139.3 310.0 L133.4 313.6 L127.5 317.1 L121.6 320.7 L115.7 324.2 L109.9 327.8 L104.0 331.3 L98.1 334.8 L92.2 338.4 L86.4 341.9 L80.5 345.5 L74.6 349.0 L68.7 352.5 L62.9 356.1 L57.0 359.6 L51.1 363.2 L45.3 366.7 L43.1 368.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d2" style="--l:180.9" d="M260.0 239.2 L256.5 242.7 L252.9 246.3 L249.4 249.8 L245.8 253.4 L242.3 256.9 L238.8 260.5 L235.3 264.0 L231.7 267.5 L228.2 271.1 L224.7 274.6 L221.2 278.2 L217.7 281.7 L214.2 285.2 L210.7 288.8 L207.2 292.3 L203.7 295.9 L200.2 299.4 L196.7 303.0 L193.2 306.5 L189.8 310.0 L186.3 313.6 L182.8 317.1 L179.3 320.7 L175.9 324.2 L172.4 327.8 L168.9 331.3 L165.5 334.8 L162.0 338.4 L158.5 341.9 L155.1 345.5 L151.6 349.0 L148.2 352.5 L144.7 356.1 L141.2 359.6 L137.8 363.2 L134.3 366.7 L133.0 368.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d2" style="--l:148.4" d="M260.0 239.2 L258.0 242.7 L255.9 246.3 L253.9 249.8 L251.8 253.4 L249.8 256.9 L247.7 260.5 L245.7 264.0 L243.7 267.5 L241.6 271.1 L239.6 274.6 L237.6 278.2 L235.5 281.7 L233.5 285.2 L231.5 288.8 L229.5 292.3 L227.4 295.9 L225.4 299.4 L223.4 303.0 L221.4 306.5 L219.3 310.0 L217.3 313.6 L215.3 317.1 L213.3 320.7 L211.3 324.2 L209.2 327.8 L207.2 331.3 L205.2 334.8 L203.2 338.4 L201.2 341.9 L199.2 345.5 L197.2 349.0 L195.1 352.5 L193.1 356.1 L191.1 359.6 L189.1 363.2 L187.1 366.7 L186.4 368.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d2" style="--l:128.8" d="M260.0 239.2 L260.0 242.7 L260.0 246.3 L260.0 249.8 L260.0 253.4 L260.0 256.9 L260.0 260.5 L260.0 264.0 L260.0 267.5 L260.0 271.1 L260.0 274.6 L260.0 278.2 L260.0 281.7 L260.0 285.2 L260.0 288.8 L260.0 292.3 L260.0 295.9 L260.0 299.4 L260.0 303.0 L260.0 306.5 L260.0 310.0 L260.0 313.6 L260.0 317.1 L260.0 320.7 L260.0 324.2 L260.0 327.8 L260.0 331.3 L260.0 334.8 L260.0 338.4 L260.0 341.9 L260.0 345.5 L260.0 349.0 L260.0 352.5 L260.0 356.1 L260.0 359.6 L260.0 363.2 L260.0 366.7 L260.0 368.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d2" style="--l:148.4" d="M260.0 239.2 L262.0 242.7 L264.1 246.3 L266.1 249.8 L268.2 253.4 L270.2 256.9 L272.3 260.5 L274.3 264.0 L276.3 267.5 L278.4 271.1 L280.4 274.6 L282.4 278.2 L284.5 281.7 L286.5 285.2 L288.5 288.8 L290.5 292.3 L292.6 295.9 L294.6 299.4 L296.6 303.0 L298.6 306.5 L300.7 310.0 L302.7 313.6 L304.7 317.1 L306.7 320.7 L308.7 324.2 L310.8 327.8 L312.8 331.3 L314.8 334.8 L316.8 338.4 L318.8 341.9 L320.8 345.5 L322.8 349.0 L324.9 352.5 L326.9 356.1 L328.9 359.6 L330.9 363.2 L332.9 366.7 L333.6 368.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d2" style="--l:180.9" d="M260.0 239.2 L263.5 242.7 L267.1 246.3 L270.6 249.8 L274.2 253.4 L277.7 256.9 L281.2 260.5 L284.7 264.0 L288.3 267.5 L291.8 271.1 L295.3 274.6 L298.8 278.2 L302.3 281.7 L305.8 285.2 L309.3 288.8 L312.8 292.3 L316.3 295.9 L319.8 299.4 L323.3 303.0 L326.8 306.5 L330.2 310.0 L333.7 313.6 L337.2 317.1 L340.7 320.7 L344.1 324.2 L347.6 327.8 L351.1 331.3 L354.5 334.8 L358.0 338.4 L361.5 341.9 L364.9 345.5 L368.4 349.0 L371.8 352.5 L375.3 356.1 L378.8 359.6 L382.2 363.2 L385.7 366.7 L387.0 368.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d2" style="--l:252.2" d="M260.0 239.2 L266.1 242.7 L272.3 246.3 L278.4 249.8 L284.5 253.4 L290.6 256.9 L296.7 260.5 L302.7 264.0 L308.8 267.5 L314.8 271.1 L320.9 274.6 L326.9 278.2 L332.9 281.7 L338.9 285.2 L344.9 288.8 L350.9 292.3 L356.9 295.9 L362.8 299.4 L368.8 303.0 L374.7 306.5 L380.7 310.0 L386.6 313.6 L392.5 317.1 L398.4 320.7 L404.3 324.2 L410.1 327.8 L416.0 331.3 L421.9 334.8 L427.8 338.4 L433.6 341.9 L439.5 345.5 L445.4 349.0 L451.3 352.5 L457.1 356.1 L463.0 359.6 L468.9 363.2 L474.7 366.7 L476.9 368.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<circle class="nhf2-dot nhf2-p2" cx="43.1" cy="368.0" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p2" cx="133.0" cy="368.0" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p2" cx="186.4" cy="368.0" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p2" cx="260.0" cy="368.0" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p2" cx="333.6" cy="368.0" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p2" cx="387.0" cy="368.0" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p2" cx="476.9" cy="368.0" r="3.4" fill="#C2410C"></circle>
+<rect x="275.0" y="236.7" width="5" height="5" fill="none" stroke="#0B7068" stroke-width="1.6" transform="rotate(25 277.5 239.2)"></rect><text class="nhf2-dot nhf2-p2" x="260.0" y="360.0" font-size="11" font-weight="700" fill="#0B7068" text-anchor="middle">落點不動</text>
+</g><g clip-path="url(#nhf2-clipB)">
+<path class="nhf2-draw nhf2-d2" style="--l:128.8" d="M590.0 239.2 L590.0 242.7 L590.0 246.3 L590.0 249.8 L590.0 253.4 L590.0 256.9 L590.0 260.5 L590.0 264.0 L590.0 267.5 L590.0 271.1 L590.0 274.6 L590.0 278.2 L590.0 281.7 L590.0 285.2 L590.0 288.8 L590.0 292.3 L590.0 295.9 L590.0 299.4 L590.0 303.0 L590.0 306.5 L590.0 310.0 L590.0 313.6 L590.0 317.1 L590.0 320.7 L590.0 324.2 L590.0 327.8 L590.0 331.3 L590.0 334.8 L590.0 338.4 L590.0 341.9 L590.0 345.5 L590.0 349.0 L590.0 352.5 L590.0 356.1 L590.0 359.6 L590.0 363.2 L590.0 366.7 L590.0 368.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d2" style="--l:128.8" d="M590.0 239.2 L590.0 242.7 L590.0 246.3 L590.0 249.8 L590.0 253.4 L590.0 256.9 L590.0 260.5 L590.0 264.0 L590.0 267.5 L590.0 271.1 L590.0 274.6 L590.0 278.2 L590.0 281.7 L590.0 285.2 L590.0 288.8 L590.0 292.3 L590.0 295.9 L590.0 299.4 L590.0 303.0 L590.0 306.5 L590.0 310.0 L590.0 313.6 L590.0 317.1 L590.0 320.7 L590.0 324.2 L590.0 327.8 L590.0 331.3 L590.0 334.8 L590.0 338.4 L590.0 341.9 L590.0 345.5 L590.0 349.0 L590.0 352.5 L590.0 356.1 L590.0 359.6 L590.0 363.2 L590.0 366.7 L590.0 368.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<circle class="nhf2-dot nhf2-p2" cx="590.0" cy="368.0" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p2" cx="590.0" cy="368.0" r="3.4" fill="#C2410C"></circle>
+
+</g>
+<text x="36" y="470" font-size="13" font-weight="700" fill="#0B7068">③ TX roll 設錯：幾乎沒有影響</text>
+<text x="36" y="492" font-size="12" fill="#06172E">TX 是繞自身長軸轉動，發射圓錐的形狀與方向都不變，算出的落點幾乎不動。</text>
+<text x="36" y="512" font-size="12" fill="#06172E">所以原廠對 TX roll 放寬到 ±0.20°；同理，RX 的 pitch 也放寬到 ±0.20°。</text>
+</g>
+<g class="nhf2-sc nhf2-s3">
+<rect x="509.5" y="152" width="92" height="22" rx="11" fill="#C2410C"></rect><text x="555.5" y="167" font-size="11" font-weight="700" fill="#FFFFFF" text-anchor="middle">④ TX pitch 設錯</text>
+<rect x="525.0" y="97.0" width="80" height="22" rx="3" fill="none" stroke="#C2410C" stroke-width="2"></rect>
+<g clip-path="url(#nhf2-clipA)">
+<path class="nhf2-draw nhf2-d3" style="--l:251.7" d="M260.0 239.2 L253.8 242.7 L247.6 246.3 L241.4 249.8 L235.3 253.4 L229.1 256.9 L223.0 260.5 L216.9 264.0 L210.7 267.5 L204.6 271.1 L198.5 274.6 L192.5 278.2 L186.4 281.7 L180.3 285.2 L174.3 288.8 L168.2 292.3 L162.2 295.9 L156.2 299.4 L150.2 303.0 L144.2 306.5 L138.2 310.0 L132.2 313.6 L126.3 317.1 L120.3 320.7 L114.4 324.2 L108.4 327.8 L102.5 331.3 L96.6 334.8 L90.7 338.4 L84.7 341.9 L78.8 345.5 L72.9 349.0 L67.0 352.5 L61.0 356.1 L55.1 359.6 L49.2 363.2 L43.3 366.7 L43.1 366.8" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d3" style="--l:180.0" d="M260.0 239.2 L256.4 242.7 L252.8 246.3 L249.3 249.8 L245.7 253.4 L242.1 256.9 L238.6 260.5 L235.0 264.0 L231.5 267.5 L227.9 271.1 L224.4 274.6 L220.8 278.2 L217.3 281.7 L213.8 285.2 L210.2 288.8 L206.7 292.3 L203.2 295.9 L199.6 299.4 L196.1 303.0 L192.6 306.5 L189.1 310.0 L185.6 313.6 L182.1 317.1 L178.6 320.7 L175.1 324.2 L171.6 327.8 L168.1 331.3 L164.6 334.8 L161.1 338.4 L157.6 341.9 L154.1 345.5 L150.6 349.0 L147.1 352.5 L143.6 356.1 L140.1 359.6 L136.6 363.2 L133.1 366.7 L133.0 366.8" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d3" style="--l:147.3" d="M260.0 239.2 L257.9 242.7 L255.9 246.3 L253.8 249.8 L251.7 253.4 L249.7 256.9 L247.6 260.5 L245.6 264.0 L243.5 267.5 L241.5 271.1 L239.4 274.6 L237.4 278.2 L235.3 281.7 L233.3 285.2 L231.2 288.8 L229.2 292.3 L227.1 295.9 L225.1 299.4 L223.0 303.0 L221.0 306.5 L218.9 310.0 L216.9 313.6 L214.9 317.1 L212.8 320.7 L210.8 324.2 L208.8 327.8 L206.7 331.3 L204.7 334.8 L202.7 338.4 L200.6 341.9 L198.6 345.5 L196.5 349.0 L194.5 352.5 L192.5 356.1 L190.4 359.6 L188.4 363.2 L186.4 366.7 L186.3 366.8" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d3" style="--l:127.6" d="M260.0 239.2 L260.0 242.7 L260.0 246.3 L260.0 249.8 L260.0 253.4 L260.0 256.9 L260.0 260.5 L260.0 264.0 L260.0 267.5 L260.0 271.1 L260.0 274.6 L260.0 278.2 L260.0 281.7 L260.0 285.2 L260.0 288.8 L260.0 292.3 L260.0 295.9 L260.0 299.4 L260.0 303.0 L260.0 306.5 L260.0 310.0 L260.0 313.6 L260.0 317.1 L260.0 320.7 L260.0 324.2 L260.0 327.8 L260.0 331.3 L260.0 334.8 L260.0 338.4 L260.0 341.9 L260.0 345.5 L260.0 349.0 L260.0 352.5 L260.0 356.1 L260.0 359.6 L260.0 363.2 L260.0 366.7 L260.0 366.8" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d3" style="--l:147.3" d="M260.0 239.2 L262.1 242.7 L264.1 246.3 L266.2 249.8 L268.3 253.4 L270.3 256.9 L272.4 260.5 L274.4 264.0 L276.5 267.5 L278.5 271.1 L280.6 274.6 L282.6 278.2 L284.7 281.7 L286.7 285.2 L288.8 288.8 L290.8 292.3 L292.9 295.9 L294.9 299.4 L297.0 303.0 L299.0 306.5 L301.1 310.0 L303.1 313.6 L305.1 317.1 L307.2 320.7 L309.2 324.2 L311.2 327.8 L313.3 331.3 L315.3 334.8 L317.3 338.4 L319.4 341.9 L321.4 345.5 L323.5 349.0 L325.5 352.5 L327.5 356.1 L329.6 359.6 L331.6 363.2 L333.6 366.7 L333.7 366.8" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d3" style="--l:180.0" d="M260.0 239.2 L263.6 242.7 L267.2 246.3 L270.7 249.8 L274.3 253.4 L277.9 256.9 L281.4 260.5 L285.0 264.0 L288.5 267.5 L292.1 271.1 L295.6 274.6 L299.2 278.2 L302.7 281.7 L306.2 285.2 L309.8 288.8 L313.3 292.3 L316.8 295.9 L320.4 299.4 L323.9 303.0 L327.4 306.5 L330.9 310.0 L334.4 313.6 L337.9 317.1 L341.4 320.7 L344.9 324.2 L348.4 327.8 L351.9 331.3 L355.4 334.8 L358.9 338.4 L362.4 341.9 L365.9 345.5 L369.4 349.0 L372.9 352.5 L376.4 356.1 L379.9 359.6 L383.4 363.2 L386.9 366.7 L387.0 366.8" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d3" style="--l:251.7" d="M260.0 239.2 L266.2 242.7 L272.4 246.3 L278.6 249.8 L284.7 253.4 L290.9 256.9 L297.0 260.5 L303.1 264.0 L309.3 267.5 L315.4 271.1 L321.5 274.6 L327.5 278.2 L333.6 281.7 L339.7 285.2 L345.7 288.8 L351.8 292.3 L357.8 295.9 L363.8 299.4 L369.8 303.0 L375.8 306.5 L381.8 310.0 L387.8 313.6 L393.7 317.1 L399.7 320.7 L405.6 324.2 L411.6 327.8 L417.5 331.3 L423.4 334.8 L429.3 338.4 L435.3 341.9 L441.2 345.5 L447.1 349.0 L453.0 352.5 L459.0 356.1 L464.9 359.6 L470.8 363.2 L476.7 366.7 L476.9 366.8" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<circle class="nhf2-dot nhf2-p3" cx="43.1" cy="366.8" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p3" cx="133.0" cy="366.8" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p3" cx="186.3" cy="366.8" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p3" cx="260.0" cy="366.8" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p3" cx="333.7" cy="366.8" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p3" cx="387.0" cy="366.8" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p3" cx="476.9" cy="366.8" r="3.4" fill="#C2410C"></circle>
+
+</g><g clip-path="url(#nhf2-clipB)">
+<path class="nhf2-draw nhf2-d3" style="--l:128.8" d="M590.0 239.2 L590.5 242.7 L591.0 246.3 L591.5 249.8 L592.0 253.4 L592.5 256.9 L593.0 260.5 L593.5 264.0 L594.0 267.5 L594.5 271.1 L595.0 274.6 L595.5 278.2 L596.0 281.7 L596.5 285.2 L596.9 288.8 L597.4 292.3 L597.9 295.9 L598.4 299.4 L598.9 303.0 L599.4 306.5 L599.9 310.0 L600.4 313.6 L600.9 317.1 L601.4 320.7 L601.9 324.2 L602.4 327.8 L602.9 331.3 L603.4 334.8 L603.9 338.4 L604.3 341.9 L604.8 345.5 L605.3 349.0 L605.8 352.5 L606.3 356.1 L606.8 359.6 L607.3 363.2 L607.8 366.7 L607.8 366.8" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d3" style="--l:128.8" d="M590.0 239.2 L590.5 242.7 L591.0 246.3 L591.5 249.8 L592.0 253.4 L592.5 256.9 L593.0 260.5 L593.5 264.0 L594.0 267.5 L594.4 271.1 L594.9 274.6 L595.4 278.2 L595.9 281.7 L596.4 285.2 L596.9 288.8 L597.4 292.3 L597.9 295.9 L598.3 299.4 L598.8 303.0 L599.3 306.5 L599.8 310.0 L600.3 313.6 L600.7 317.1 L601.2 320.7 L601.7 324.2 L602.2 327.8 L602.7 331.3 L603.1 334.8 L603.6 338.4 L604.1 341.9 L604.6 345.5 L605.0 349.0 L605.5 352.5 L606.0 356.1 L606.5 359.6 L606.9 363.2 L607.4 366.7 L607.4 366.8" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<circle class="nhf2-dot nhf2-p3" cx="607.8" cy="366.8" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p3" cx="607.4" cy="366.8" r="3.4" fill="#C2410C"></circle>
+<rect x="577.0" y="237.7" width="26" height="4" fill="none" stroke="#C2410C" stroke-width="1.6" stroke-dasharray="3 2" transform="rotate(-8 590.0 239.2)"></rect><path class="nhf2-dot nhf2-p3" d="M590.0 378.0 L607.8 378.0 M602.8 374.0 L607.8 378.0 L602.8 382.0" fill="none" stroke="#C2410C" stroke-width="1.4"></path><text class="nhf2-dot nhf2-p3" x="611.8" y="392.0" font-size="11" font-weight="700" fill="#C2410C">前移</text>
+</g>
+<text x="36" y="470" font-size="13" font-weight="700" fill="#C2410C">④ TX pitch 設錯：發射扇面前後傾斜 δ</text>
+<text x="36" y="492" font-size="12" fill="#06172E">整條帶沿航向平行前移約 D·tanδ（正下方與外側相同），水深幾乎不變；往返測線上，地物前後錯開。</text>
+<text x="36" y="512" font-size="12" fill="#06172E">水深 50 m、δ = 0.5° 時約前移 0.4 m；原廠容許 ±0.05°。</text>
+</g>
+<g class="nhf2-sc nhf2-s4">
+<rect x="608.0" y="152" width="92" height="22" rx="11" fill="#C2410C"></rect><text x="654.0" y="167" font-size="11" font-weight="700" fill="#FFFFFF" text-anchor="middle">⑤ TX Z 設錯</text>
+<rect x="353.0" y="97.0" width="80" height="22" rx="3" fill="none" stroke="#C2410C" stroke-width="2"></rect>
+<g clip-path="url(#nhf2-clipA)">
+<path class="nhf2-draw nhf2-d4" style="--l:252.0" d="M260.0 250.4 L253.8 254.0 L247.7 257.5 L241.6 261.1 L235.5 264.6 L229.3 268.2 L223.2 271.7 L217.2 275.3 L211.1 278.9 L205.0 282.4 L199.0 286.0 L192.9 289.5 L186.9 293.1 L180.9 296.6 L174.9 300.2 L168.9 303.7 L162.9 307.3 L156.9 310.9 L150.9 314.4 L145.0 318.0 L139.0 321.5 L133.1 325.1 L127.2 328.6 L121.2 332.2 L115.3 335.8 L109.4 339.3 L103.5 342.9 L97.6 346.4 L91.6 350.0 L85.7 353.5 L79.8 357.1 L73.9 360.7 L68.0 364.2 L62.0 367.8 L56.1 371.3 L50.2 374.9 L44.3 378.4 L43.3 379.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d4" style="--l:180.7" d="M260.0 250.4 L256.4 254.0 L252.9 257.5 L249.3 261.1 L245.8 264.6 L242.3 268.2 L238.7 271.7 L235.2 275.3 L231.7 278.9 L228.1 282.4 L224.6 286.0 L221.1 289.5 L217.6 293.1 L214.0 296.6 L210.5 300.2 L207.0 303.7 L203.5 307.3 L200.0 310.9 L196.5 314.4 L193.0 318.0 L189.5 321.5 L186.0 325.1 L182.5 328.6 L179.1 332.2 L175.6 335.8 L172.1 339.3 L168.6 342.9 L165.1 346.4 L161.6 350.0 L158.1 353.5 L154.7 357.1 L151.2 360.7 L147.7 364.2 L144.2 367.8 L140.7 371.3 L137.2 374.9 L133.8 378.4 L133.1 379.1" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d4" style="--l:148.2" d="M260.0 250.4 L257.9 254.0 L255.9 257.5 L253.8 261.1 L251.8 264.6 L249.7 268.2 L247.7 271.7 L245.7 275.3 L243.6 278.9 L241.6 282.4 L239.5 286.0 L237.5 289.5 L235.5 293.1 L233.4 296.6 L231.4 300.2 L229.3 303.7 L227.3 307.3 L225.3 310.9 L223.2 314.4 L221.2 318.0 L219.2 321.5 L217.2 325.1 L215.1 328.6 L213.1 332.2 L211.1 335.8 L209.1 339.3 L207.0 342.9 L205.0 346.4 L203.0 350.0 L201.0 353.5 L198.9 357.1 L196.9 360.7 L194.9 364.2 L192.8 367.8 L190.8 371.3 L188.8 374.9 L186.8 378.4 L186.4 379.1" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d4" style="--l:128.7" d="M260.0 250.4 L260.0 254.0 L260.0 257.5 L260.0 261.1 L260.0 264.6 L260.0 268.2 L260.0 271.7 L260.0 275.3 L260.0 278.9 L260.0 282.4 L260.0 286.0 L260.0 289.5 L260.0 293.1 L260.0 296.6 L260.0 300.2 L260.0 303.7 L260.0 307.3 L260.0 310.9 L260.0 314.4 L260.0 318.0 L260.0 321.5 L260.0 325.1 L260.0 328.6 L260.0 332.2 L260.0 335.8 L260.0 339.3 L260.0 342.9 L260.0 346.4 L260.0 350.0 L260.0 353.5 L260.0 357.1 L260.0 360.7 L260.0 364.2 L260.0 367.8 L260.0 371.3 L260.0 374.9 L260.0 378.4 L260.0 379.1" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d4" style="--l:148.2" d="M260.0 250.4 L262.1 254.0 L264.1 257.5 L266.2 261.1 L268.2 264.6 L270.3 268.2 L272.3 271.7 L274.3 275.3 L276.4 278.9 L278.4 282.4 L280.5 286.0 L282.5 289.5 L284.5 293.1 L286.6 296.6 L288.6 300.2 L290.7 303.7 L292.7 307.3 L294.7 310.9 L296.8 314.4 L298.8 318.0 L300.8 321.5 L302.8 325.1 L304.9 328.6 L306.9 332.2 L308.9 335.8 L310.9 339.3 L313.0 342.9 L315.0 346.4 L317.0 350.0 L319.0 353.5 L321.1 357.1 L323.1 360.7 L325.1 364.2 L327.2 367.8 L329.2 371.3 L331.2 374.9 L333.2 378.4 L333.6 379.1" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d4" style="--l:180.7" d="M260.0 250.4 L263.6 254.0 L267.1 257.5 L270.7 261.1 L274.2 264.6 L277.7 268.2 L281.3 271.7 L284.8 275.3 L288.3 278.9 L291.9 282.4 L295.4 286.0 L298.9 289.5 L302.4 293.1 L306.0 296.6 L309.5 300.2 L313.0 303.7 L316.5 307.3 L320.0 310.9 L323.5 314.4 L327.0 318.0 L330.5 321.5 L334.0 325.1 L337.5 328.6 L340.9 332.2 L344.4 335.8 L347.9 339.3 L351.4 342.9 L354.9 346.4 L358.4 350.0 L361.9 353.5 L365.3 357.1 L368.8 360.7 L372.3 364.2 L375.8 367.8 L379.3 371.3 L382.8 374.9 L386.2 378.4 L386.9 379.1" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d4" style="--l:252.0" d="M260.0 250.4 L266.2 254.0 L272.3 257.5 L278.4 261.1 L284.5 264.6 L290.7 268.2 L296.8 271.7 L302.8 275.3 L308.9 278.9 L315.0 282.4 L321.0 286.0 L327.1 289.5 L333.1 293.1 L339.1 296.6 L345.1 300.2 L351.1 303.7 L357.1 307.3 L363.1 310.9 L369.1 314.4 L375.0 318.0 L381.0 321.5 L386.9 325.1 L392.8 328.6 L398.8 332.2 L404.7 335.8 L410.6 339.3 L416.5 342.9 L422.4 346.4 L428.4 350.0 L434.3 353.5 L440.2 357.1 L446.1 360.7 L452.0 364.2 L458.0 367.8 L463.9 371.3 L469.8 374.9 L475.7 378.4 L476.7 379.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<circle class="nhf2-dot nhf2-p4" cx="43.3" cy="379.0" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p4" cx="133.1" cy="379.1" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p4" cx="186.4" cy="379.1" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p4" cx="260.0" cy="379.1" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p4" cx="333.6" cy="379.1" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p4" cx="386.9" cy="379.1" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p4" cx="476.7" cy="379.0" r="3.4" fill="#C2410C"></circle>
+<path class="nhf2-dot nhf2-p4" d="M43.3 379.0 L133.1 379.1 L186.4 379.1 L260.0 379.1 L333.6 379.1 L386.9 379.1 L476.7 379.0" fill="none" stroke="#C2410C" stroke-width="1.3" stroke-dasharray="5 4"></path>
+<rect x="275.0" y="247.9" width="5" height="5" fill="none" stroke="#C2410C" stroke-width="1.6" stroke-dasharray="2 1.5"></rect><path d="M314.0 239.2 L314.0 250.4 M310.5 246.4 L314.0 250.4 L317.5 246.4" fill="none" stroke="#C2410C" stroke-width="1.3"></path><text x="320.0" y="250.8" font-size="10.5" font-weight="700" fill="#C2410C">ΔZ</text><text class="nhf2-dot nhf2-p4" x="260.0" y="395.2" font-size="11" font-weight="700" fill="#C2410C" text-anchor="middle">整條帶一起變深</text>
+</g><g clip-path="url(#nhf2-clipB)">
+<path class="nhf2-draw nhf2-d4" style="--l:128.7" d="M590.0 250.4 L590.0 254.0 L590.0 257.5 L590.0 261.1 L590.0 264.6 L590.0 268.2 L590.0 271.7 L590.0 275.3 L590.0 278.9 L590.0 282.4 L590.0 286.0 L590.0 289.5 L590.0 293.1 L590.0 296.6 L590.0 300.2 L590.0 303.7 L590.0 307.3 L590.0 310.9 L590.0 314.4 L590.0 318.0 L590.0 321.5 L590.0 325.1 L590.0 328.6 L590.0 332.2 L590.0 335.8 L590.0 339.3 L590.0 342.9 L590.0 346.4 L590.0 350.0 L590.0 353.5 L590.0 357.1 L590.0 360.7 L590.0 364.2 L590.0 367.8 L590.0 371.3 L590.0 374.9 L590.0 378.4 L590.0 379.1" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<path class="nhf2-draw nhf2-d4" style="--l:128.6" d="M590.0 250.4 L590.0 254.0 L590.0 257.5 L590.0 261.1 L590.0 264.6 L590.0 268.2 L590.0 271.7 L590.0 275.3 L590.0 278.9 L590.0 282.4 L590.0 286.0 L590.0 289.5 L590.0 293.1 L590.0 296.6 L590.0 300.2 L590.0 303.7 L590.0 307.3 L590.0 310.9 L590.0 314.4 L590.0 318.0 L590.0 321.5 L590.0 325.1 L590.0 328.6 L590.0 332.2 L590.0 335.8 L590.0 339.3 L590.0 342.9 L590.0 346.4 L590.0 350.0 L590.0 353.5 L590.0 357.1 L590.0 360.7 L590.0 364.2 L590.0 367.8 L590.0 371.3 L590.0 374.9 L590.0 378.4 L590.0 379.0" fill="none" stroke="#C2410C" stroke-width="2.2" stroke-linecap="round"></path>
+<circle class="nhf2-dot nhf2-p4" cx="590.0" cy="379.1" r="3.4" fill="#C2410C"></circle>
+<circle class="nhf2-dot nhf2-p4" cx="590.0" cy="379.0" r="3.4" fill="#C2410C"></circle>
+<rect x="577.0" y="248.9" width="26" height="4" fill="none" stroke="#C2410C" stroke-width="1.6" stroke-dasharray="3 2"></rect>
+</g>
+<text x="36" y="470" font-size="13" font-weight="700" fill="#C2410C">⑤ TX Z 設錯：ray tracing 的起始深度錯</text>
+<text x="36" y="492" font-size="12" fill="#06172E">Ray tracing 從 TX 的深度開始。Z 設錯多少，整條帶的水深就偏多少，再沿剖面折射出去。</text>
+<text x="36" y="512" font-size="12" fill="#06172E">Z 設錯 0.1 m，水深就偏約 0.1 m；原廠容許只有 ±0.005 m。</text>
+</g>
 </svg>
-<figcaption style="margin-top: 16px; font-size: 14px; color: #4A5B70; line-height: 1.7"><span style="color: #8E5A14; font-weight: 700">圖 2</span>　每個波束的 SVC 計算順序（分體式）。可以各自設定的安裝參數，幾乎都在 ray tracing 之前進入：Z lever arm 決定①起始深度，TX、RX 的安裝角與相對位置決定③起始向量；水平 lever arm 主要在⑤以平移加上，但它乘上姿態產生的誘發升沉會回到①。表面聲速錯誤在②進入，不屬於安裝參數，列出作為對照。</figcaption>
+<figcaption style="margin-top: 16px; font-size: 14px; color: #4A5B70; line-height: 1.7"><span style="color: #8E5A14; font-weight: 700">圖 2</span>　TX、RX 各自設定 offset 與 roll／pitch／heading 時，設定錯誤在 ray tracing 之前就進入計算（動態示意，約 20 秒循環；角度與深度誤差已放大）。聲線以文中剖面（表層 1545 m/s、35 m 降為 1528 m/s）實際追蹤。容許誤差引自原廠安裝手冊的 alignment specifications，以 0.7° 型分體式換能器為例。</figcaption>
 </figure>
 <p style="margin: 0 0 16px"><strong>一體式</strong>：發射波束同樣會依縱搖做電子導向（多數機型也有首搖穩定與分扇區發射），所以波束向量一樣要同時考慮發射導向角與接收導向角。差別在於 TX、RX 在同一殼體內、相距很短，間距與相對角度由原廠內建，收發分置與時間差造成的影響小。</p>
 <p style="margin: 0 0 16px"><strong>分體式</strong>：同樣依當下姿態對發射波束做電子導向，並把一個 ping 拆成多個扇區、各扇區導向角不同（依水深模式而定，以 Kongsberg Discovery MBES 為例，常見 3 到 8 個扇區）。但 TX、RX 是分開安裝、相距可達數公尺，從發射到接收之間船已移動、姿態也變了，波束實際上是「發射圓錐面」與「接收圓錐面」的交線，必須同時考慮兩個時刻、兩支陣列的角度與位置。</p>
@@ -209,8 +374,8 @@
 
 <h2 style="margin: 48px 0 20px; padding-top: 40px; border-top: 1px solid #CDBF9E; font-family: 'Noto Serif TC', serif; font-size: 32px; line-height: 1.35; font-weight: 700; color: #0F3D6B">分體式：TX、RX 位置與安裝角不準的影響</h2>
 <p style="margin: 0 0 16px">如圖 2，分體式系統在做 ray tracing 之前，要先用 TX、RX 各自的 lever arm 與安裝角算出兩件事：波束的起始方向（入射角與方位角），以及聲線從哪個深度開始追蹤。許多系統在處理單元內即時完成這個計算，結果直接寫進原始檔的測深資料中。</p>
-<p style="margin: 0 0 16px">換句話說，安裝參數的誤差<strong>在 ray tracing 之前就進入計算</strong>（圖 2 的①③），不是事後疊加的小改正量。角度誤差會讓整個波束扇面先轉一個角度，再沿剖面折射出去。以水深 50 m、60° 波束、表層 1545 m/s 到 35 m 降為 1528 m/s 的剖面計算：安裝角差 0.5°，落點水深差約 0.66 m、橫向差約 0.40 m；把 XYZ 轉回 0.5° 後只剩約 1 cm，淺水時近似整體旋轉。但在水深 500 m、表層約 1540 m/s、50–150 m 溫躍層降到 1500 m/s 的剖面，同樣 0.5° 的水深誤差約 6.4 m，轉回去後 60° 波束仍差約 0.5 m、65° 波束約 0.7 m。所以發現安裝角有誤時，正確的做法是修正參數後，從原始 range／angle 重新計算；淺水時把 XYZ 轉回去，只能算是近似。</p>
-<p style="margin: 0 0 16px">依 Mills cross 的幾何，<strong>RX 陣列決定跨航向角度，TX 陣列決定沿航向角度</strong>，所以各項誤差影響的方向不同。反過來說，TX 的 roll 與 RX 的 pitch 是繞陣列自身長軸轉動，幾乎不改變各自的圓錐，對水深的影響很小。下表以水深 50 m、60° 外側波束（斜距約 100 m）估算，未計入折射放大：</p>
+<p style="margin: 0 0 16px">換句話說，安裝參數的誤差<strong>在 ray tracing 之前就進入計算</strong>（見圖 2），不是事後疊加的小改正量。角度誤差會讓整個波束扇面先轉一個角度，再沿剖面折射出去。以水深 50 m、60° 波束、表層 1545 m/s 到 35 m 降為 1528 m/s 的剖面計算：安裝角差 0.5°，落點水深差約 0.66 m、橫向差約 0.40 m；把 XYZ 轉回 0.5° 後只剩約 1 cm，淺水時近似整體旋轉。但在水深 500 m、表層約 1540 m/s、50–150 m 溫躍層降到 1500 m/s 的剖面，同樣 0.5° 的水深誤差約 6.4 m，轉回去後 60° 波束仍差約 0.5 m、65° 波束約 0.7 m。所以發現安裝角有誤時，正確的做法是修正參數後，從原始 range／angle 重新計算；淺水時把 XYZ 轉回去，只能算是近似。</p>
+<p style="margin: 0 0 16px">依 Mills cross 的幾何，<strong>RX 陣列決定跨航向角度，TX 陣列決定沿航向角度</strong>，所以各項誤差影響的方向不同。反過來說，TX 的 roll 與 RX 的 pitch 是繞陣列自身長軸轉動，幾乎不改變各自的圓錐，對水深的影響很小。原廠安裝手冊的容許誤差也反映這一點：RX roll 要求 ±0.02°，TX pitch 與 heading 要求 ±0.05°，Z 要求 ±0.005 m，TX roll 與 RX pitch 則放寬到 ±0.20°。下表以水深 50 m、60° 外側波束（斜距約 100 m）估算，未計入折射放大：</p>
 <div style="overflow-x: auto; border: 1px solid #CDBF9E; border-radius: 4px; background: #FBF8F1; margin: 0 0 28px">
 <table style="width: 100%; min-width: 680px; border-collapse: collapse; font-size: 15px; line-height: 1.6">
 <thead>
@@ -223,7 +388,7 @@
 </thead>
 <tbody>
 <tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">安裝 roll（經由 RX 表現）</th><td style="padding: 14px 16px">0.1°</td><td style="padding: 14px 16px">水深差約 ±0.15 m，左右相反</td><td style="padding: 14px 16px">條帶一邊高、一邊低</td></tr>
-<tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">安裝 pitch（經由 TX 表現）</th><td style="padding: 14px 16px">0.5°</td><td style="padding: 14px 16px">沿航向位移：正下方約 0.44 m、外側約 0.87 m；水深幾乎不變</td><td style="padding: 14px 16px">往返測線上，地物前後錯開</td></tr>
+<tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">安裝 pitch（經由 TX 表現）</th><td style="padding: 14px 16px">0.5°</td><td style="padding: 14px 16px">整條帶沿航向平行前移約 0.44 m，正下方與外側相同；水深幾乎不變</td><td style="padding: 14px 16px">往返測線上，地物前後錯開</td></tr>
 <tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">TX／RX 相對 heading</th><td style="padding: 14px 16px">0.5°</td><td style="padding: 14px 16px">外側沿航向位移約 0.76 m，左右相反</td><td style="padding: 14px 16px">條帶相對航向歪斜，扇區交界錯位</td></tr>
 <tr style="border-top: 1px solid #CDBF9E; background: #F1E9D6"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">TX／RX 相對位置</th><td style="padding: 14px 16px">沿航向量錯</td><td style="padding: 14px 16px">依導向角與水深而定；淺水、大導向角時影響水深</td><td style="padding: 14px 16px">扇區交界出現階差</td></tr>
 <tr style="border-top: 1px solid #CDBF9E"><th scope="row" style="padding: 14px 16px; text-align: left; font-weight: 700; color: #0F3D6B">垂直 lever arm（Z）</th><td style="padding: 14px 16px">0.10 m</td><td style="padding: 14px 16px">全條帶水深偏 0.10 m，聲線起始深度也跟著偏</td><td style="padding: 14px 16px">與其他船、潮位基準不符</td></tr>
@@ -232,7 +397,7 @@
 </table>
 </div>
 <figure style="margin: 8px 0 32px; background: #F1E9D6; border: 1px solid #CDBF9E; border-radius: 4px; padding: 24px">
-<svg viewBox="0 0 720 472" role="img" aria-label="四種誤差在資料上的樣子：安裝 roll 誤差使條帶一邊高一邊低；聲速誤差使條帶左右對稱彎曲；安裝 pitch 誤差使條帶在俯視上前移且外側移更多；TX 與 RX 相對 heading 誤差使條帶相對航向歪斜。" style="width: 100%; height: auto; display: block; font-family: 'Noto Sans TC', sans-serif">
+<svg viewBox="0 0 720 472" role="img" aria-label="四種誤差在資料上的樣子：安裝 roll 誤差使條帶一邊高一邊低；聲速誤差使條帶左右對稱彎曲；安裝 pitch 誤差使條帶在俯視上整條平行前移；TX 與 RX 相對 heading 誤差使條帶相對航向歪斜。" style="width: 100%; height: auto; display: block; font-family: 'Noto Sans TC', sans-serif">
 <rect x="20" y="20" width="335" height="200" rx="6" fill="#FBF8F1"></rect>
 <text x="36" y="46" font-size="13" font-weight="600" fill="#8E5A14">① 安裝 roll 誤差（經由 RX）</text>
 <text x="36" y="64" font-size="12" fill="#4A5B70">跨航向剖面：一邊高、一邊低</text>
@@ -252,10 +417,10 @@
 <text x="532" y="208" text-anchor="middle" font-size="11" fill="#06172E">兩側同時上翹或下彎</text>
 <rect x="20" y="240" width="335" height="200" rx="6" fill="#FBF8F1"></rect>
 <text x="36" y="266" font-size="13" font-weight="600" fill="#1A4682">③ 安裝 pitch 誤差（經由 TX）</text>
-<text x="36" y="284" font-size="12" fill="#4A5B70">海底俯視：條帶前移，外側移更多</text>
+<text x="36" y="284" font-size="12" fill="#4A5B70">海底俯視：整條帶平行前移</text>
 <line x1="45" y1="400" x2="330" y2="400" stroke="#6E7F91" stroke-width="1.5" stroke-dasharray="6 4"></line>
-<path d="M45 345 Q 187.5 395 330 345" fill="none" stroke="#0F3D6B" stroke-width="2.5"></path>
-<path d="M300 396 L300 360 M295 366 L300 360 L305 366" fill="none" stroke="#1A4682" stroke-width="1.5"></path>
+<path d="M45 368 L330 368" fill="none" stroke="#0F3D6B" stroke-width="2.5"></path>
+<path d="M300 396 L300 373 M295 379 L300 373 L305 379" fill="none" stroke="#1A4682" stroke-width="1.5"></path>
 <text x="306" y="384" font-size="11" fill="#1A4682">前移</text>
 <path d="M187 380 Q195 388 195 398 L195 420 L179 420 L179 398 Q179 388 187 380 Z" fill="#FBF8F1" stroke="#0F3D6B" stroke-width="1.2"></path>
 <text x="200" y="390" font-size="10" fill="#06172E">船艏</text>
