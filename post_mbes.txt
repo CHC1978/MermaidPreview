@@ -598,7 +598,7 @@
 </figure>
 <p style="margin: 0 0 16px">三個實務重點：</p>
 <ul style="margin: 0 0 16px; padding-left: 22px; display: flex; flex-direction: column; gap: 10px">
-<li><strong>Patch test 的結果要放進對的地方。</strong>一體式只有一組安裝角，校正值直接改在這一組即可。分體式的 TX 與 RX 已依既定的安裝位置與角度固定在同一個安裝 frame 上，兩者的相對幾何不變；patch test 求得的 roll、pitch、heading 偏差，應視為整個安裝 frame 的偏差，一起套用到兩支陣列。若拆開只改其中一支，會破壞原本的相對幾何，校正值在不同扇區、不同導向角下就不會一致。至於這個偏差要記在哪裡，取決於船上有沒有基準面。安裝時做過 Vessel Alignment Survey、定義出 Reference Plane 的船，各感測器的角度都已量到同一個基準面上；原廠操作手冊就是在這個前提下，把 patch test 的結果加在姿態感測器的角度偏移上，這時 patch test 只是微調。小船側掛（side mount）通常沒有條件定義 Reference Plane，做法是以 IMU 自身的座標為基準，把 patch test 的結果記在安裝 frame 的角度上。Patch test 只能求出換能器相對於 IMU 的角度，分不出兩者各自相對於船體的部分；兩邊都當成未知數，就沒有唯一解。不論哪一種做法，同一個校正值只能填在一個地方。</li>
+<li><strong>Patch test 的結果要放進對的地方。</strong>一體式只有一組安裝角，校正值直接改在這一組即可。分體式的 TX 與 RX 已依既定的安裝位置與角度固定在同一個安裝 frame 上，兩者的相對幾何不變；patch test 求得的 roll、pitch、heading 偏差，應視為整個安裝 frame 的偏差，一起套用到兩支陣列。若拆開只改其中一支，會破壞原本的相對幾何，校正值在不同扇區、不同導向角下就不會一致。至於這個偏差要記在哪裡，取決於船上有沒有基準面。安裝時做過 Vessel Alignment Survey、定義出 Reference Plane 的船，各感測器的角度都已量到同一個基準面上；原廠操作手冊就是在這個前提下，把 patch test 的結果加在姿態感測器的角度偏移上，這時 patch test 只是微調。小船側掛（side mount）通常沒有條件定義 Reference Plane，做法是以 IMU 自身的座標為基準，把 patch test 的結果記在安裝 frame 的角度上。Patch test 只能求出換能器相對於 IMU 的角度，兩者各自相對於船體的誤差無法分離，所以必須先固定其中一邊當基準。不論哪一種做法，同一個校正值只能填在一個地方。</li>
 <li><strong>TX、RX 的相對位置要量準。</strong>收發分置模型靠這段距離把兩個圓錐面交在正確的位置。相對位置錯了，在淺水、大導向角時最明顯，常表現為扇區交界的階差；水深增加後影響迅速變小。Hamilton 等人（2014）記錄過一個實例：一套分體式系統在安裝參數裡把陣列位置設錯，資料在扇區交界出現階差，轉彎時更明顯，用正確位置重新計算後才消除。簡報裡的數值實驗也看到同樣的現象：水深約 457 m 的資料，把沿航向間距從 2.14 m 人為放大到 10 m，扇區之間就出現不連續。另外，TX 在前、RX 在後的安裝方式，船在收發之間前進的距離會抵銷一部分間距（該例由 2.14 m 降到約 0.56 m），可以降低收發分置的影響。</li>
 <li><strong>改了參數，要從原始資料重算。</strong>即時寫進檔案的 XYZ 已經用了舊參數，應在後處理時覆寫安裝參數，從原始 range／angle 重新 ray tracing。不過當時波束實際打到海底哪裡已經固定，重算只能修正點被放到哪裡，無法改變覆蓋範圍。</li>
 </ul>
